@@ -4,11 +4,20 @@ Configurations for keypoint, skeleton and keypoint jitter sigmas.
 
 
 COCO_PERSON_SKELETON = [
+    (0, 1), (0, 2), (1, 2), (1, 3), (2, 4), (5, 6), (4, 6), (3, 5),
+    (5, 7), (7, 9), (6, 8), (8, 10), (5, 11), (6, 12), (11, 12), (11, 13),
+    (13, 15), (12, 14), (14, 16)]
+
+COCO_PERSON_SKELETON_DownUp = [
     (15, 13), (13, 11), (16, 14), (14, 12), (11, 12), (5, 11), (6, 12),
     (5, 6), (5, 7), (6, 8), (7, 9), (8, 10), (1, 2),
     (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6)]
 
-COCO_PERSON_WITH_REDUNDANT_SKELETON = []
+COCO_PERSON_WITH_REDUNDANT_SKELETON = [
+    (0, 1), (0, 2), (1, 2), (1, 3), (2, 4), (5, 6), (4, 6), (3, 5),
+    (5, 7), (7, 9), (6, 8), (8, 10), (5, 11), (6, 12), (11, 12), (11, 13),
+    (13, 15), (12, 14), (14, 16),
+    (1, 5), (2, 6), (5, 12), (6, 11), (11, 14), (12, 13)]
 
 REDUNDANT_CONNECTIONS = [
     c
@@ -16,7 +25,7 @@ REDUNDANT_CONNECTIONS = [
     if c not in COCO_PERSON_SKELETON
 ]
 
-KINEMATIC_TREE_SKELETON = [   # fixme: index form 0
+KINEMATIC_TREE_SKELETON = [
     (0, 1), (1, 3),  # left head
     (0, 2), (2, 4),
     (0, 5),
@@ -114,10 +123,51 @@ DENSER_COCO_PERSON_CONNECTIONS = [
 ]
 
 
+def heatmap_hflip(keypoints, hflip):
+    flip_indices = list([
+        keypoints.index(hflip[kp_name]) if kp_name in hflip else kp_i
+        for kp_i, kp_name in enumerate(keypoints)
+    ])
+    print(f'hflip indices: {flip_indices}')
+    return flip_indices
+
+
+def vector_hflip(keypoints, skeleton, hflip):
+    skeleton_names = [
+        (keypoints[j1], keypoints[j2])
+        for j1, j2 in skeleton
+    ]
+    flipped_skeleton_names = [
+        (hflip[j1] if j1 in hflip else j1, hflip[j2] if j2 in hflip else j2)
+        for j1, j2 in skeleton_names
+    ]
+    print(f'skeleton = {skeleton_names} \n flipped_skeleton = {flipped_skeleton_names}')
+
+    flip_indices = list(range(len(skeleton)))
+    reverse_direction = []
+    for paf_i, (n1, n2) in enumerate(skeleton_names):
+        if (n1, n2) in flipped_skeleton_names:
+            flip_indices[paf_i] = flipped_skeleton_names.index((n1, n2))
+        if (n2, n1) in flipped_skeleton_names:
+            flip_indices[paf_i] = flipped_skeleton_names.index((n2, n1))
+            reverse_direction.append(paf_i)
+    print(f'hflip indices: {flip_indices} \n reverse: {reverse_direction}')
+    return flip_indices, reverse_direction
+
+
 def print_associations():
+    print('number of limb connections: ', len(COCO_PERSON_SKELETON))
     for j1, j2 in COCO_PERSON_SKELETON:
         print(COCO_KEYPOINTS[j1], '-', COCO_KEYPOINTS[j2])
 
 
 if __name__ == '__main__':
+    # for examination
+    print(LEFT_INDEX)
+    print(RIGHT_INDEX)
     print_associations()
+
+    heatmap_hflip(COCO_KEYPOINTS, HFLIP)
+    vector_hflip(COCO_KEYPOINTS, COCO_PERSON_SKELETON, HFLIP)
+    print(REDUNDANT_CONNECTIONS)
+    vector_hflip(COCO_KEYPOINTS, COCO_PERSON_WITH_REDUNDANT_SKELETON, HFLIP)

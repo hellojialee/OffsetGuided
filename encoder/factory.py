@@ -13,7 +13,7 @@ def cli(parser):
     group = parser.add_argument_group('heatmap encoder')
     group.add_argument('--gaussian-clip-thre', default=HeatMaps.clip_thre,
                        type=float,
-                       help='Gaussian distribution below this value will be cut to zero')
+                       help='Gaussian distribution below this value is cut to zero')
     group.add_argument('--sigma', default=HeatMaps.sigma,
                        type=int, help='standard deviation of Gaussian distribution')
 

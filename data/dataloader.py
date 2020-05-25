@@ -126,7 +126,10 @@ if __name__ == '__main__':  # for debug
 
     parser = argparse.ArgumentParser(
         description=__doc__,
+        # __doc__: current module's annotation (or module.a_function's annotation)
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        # --help text with default values, e.g., gaussian threshold (default: 0.1)
+        # RawTextHelpFormatter # --help text without default values, e.g., gaussian threshold
     )
 
     train_cli(parser)
@@ -160,9 +163,19 @@ if __name__ == '__main__':  # for debug
         print("produce %d samples per second: " % (batch / (time() - start)))  # about 70~80 FPS on MBP-13
 
 
+    class AugParams:
+        """
+        An example of augmentation params.
+        """
+        flip_prob = 0.5
+        max_rotate = 40
+        min_scale = 0.7
+        max_scale = 1.3
+        max_translate = 50
+
     preprocess_transformations = [
         transforms.NormalizeAnnotations(),
-        transforms.WarpAffineTransforms(args.square_length, aug_params=args, debug_show=False),
+        transforms.WarpAffineTransforms(args.square_length, aug_params=args, debug_show=True),
         transforms.RandomApply(transforms.AnnotationJitter(), 0.1),
     ]
 

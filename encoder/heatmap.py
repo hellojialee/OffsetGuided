@@ -44,9 +44,16 @@ class HeatMaps(object):
         # mask_miss area marked by 0.
         mask_miss = (mask_miss > 0.5).astype(np.float32)
 
+        # # for IDE debug only
         # import matplotlib.pyplot as plt
+        # resize_hmps = cv2.resize(heatmaps, (0, 0),
+        #                        fx=self.stride, fy=self.stride,
+        #                        interpolation=cv2.INTER_CUBIC).astype(np.float32)
         # plt.imshow(np.repeat(mask_miss[:, :, np.newaxis], 3, axis=2))  # mask_all
         # plt.show()
+        # plt.imshow(resize_hmps[:, :, 1])
+        # plt.show()
+
         LOG.debug('the shape of output mask_miss %d width * %d height',
                   mask_miss.shape[1], mask_miss.shape[0])
 

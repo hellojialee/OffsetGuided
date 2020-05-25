@@ -48,7 +48,7 @@ class NormalizeAnnotations(Preprocess):
                 'width_height': np.array([w, h]),
                 'affine3×3mat': np.array([[1., 0., 0],
                                           [0., 1., 0],
-                                          [0., 0., 1.]])
+                                          [0., 0., 1.]], dtype=np.float32)
             }
 
         return image, anns, meta, mask_miss

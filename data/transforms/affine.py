@@ -42,29 +42,25 @@ class WarpAffineTransforms(Preprocess):
 
     Attributes:
         dst_size (int, list): the dst input image size of (width, height) or square length.
-        scale (float):, random scale factor to resize the input image, default value 1.
+        aug_params (Namespace, Class, None): augmentation params used in data transformations.
     """
 
     def __init__(self, dst_size, *,
                  aug_params=None, crop_roi=True, debug_show=False):
         assert isinstance(dst_size, (int, list)), dst_size
         self.in_size = dst_size if isinstance(dst_size, list) else [dst_size] * 2
+        self.flip_prob = aug_params.flip_prob
+        self.max_rotate = aug_params.max_rotate
+        self.min_scale = aug_params.min_scale
+        self.max_scale = aug_params.max_scale
+        self.max_translate = aug_params.max_translate
 
-        if aug_params:
-            self.flip = random.uniform(0., 1.) < aug_params.flip_prob
-            self.rotate = random.uniform(-1., 1.) * aug_params.max_rotate
+        self.flip = False
+        self.rotate = 0.
+        self.scale = 1.
+        self.x_offset = 0
+        self.y_offset = 0
 
-            self.scale = (aug_params.max_scale - aug_params.min_scale
-                          ) * random.uniform(0., 1.) + aug_params.min_scale
-
-            self.x_offset = int(random.uniform(-1., 1.) * aug_params.max_translate)
-            self.y_offset = int(random.uniform(-1., 1.) * aug_params.max_translate)
-        else:
-            self.flip = False
-            self.rotate = 0.
-            self.scale = 1.
-            self.x_offset = 0
-            self.y_offset = 0
         self.crop_roi = crop_roi
         self.debug_show = debug_show
 
@@ -74,6 +70,15 @@ class WarpAffineTransforms(Preprocess):
         Note that mask_miss keeps the same with the output size of network,
         while other data is in the original input resolution space.
         """
+        # get random transformation params
+        self.flip = random.uniform(0., 1.) < self.flip_prob
+        self.rotate = random.uniform(-1., 1.) * self.max_rotate
+
+        self.scale = (self.max_scale - self.min_scale
+                      ) * random.uniform(0., 1.) + self.min_scale
+
+        self.x_offset = int(random.uniform(-1., 1.) * self.max_translate)
+        self.y_offset = int(random.uniform(-1., 1.) * self.max_translate)
 
         meta = copy.deepcopy(meta)
         anns = copy.deepcopy(anns)
@@ -144,9 +149,10 @@ class WarpAffineTransforms(Preprocess):
             M, original_joints.transpose([0, 2, 1])).transpose([0, 2, 1])
         # 矩阵相乘的方式: 第一次transpose后坐标表示用的是列向量，所以是左乘变换矩阵
         anns[:, :, 0:2] = affine_joints
+
         # we must flip the keypoint channels accordingly.
         if self.flip:
-            assert len(RIGHT_INDEX) == len(LEFT_INDEX), 'check left and right keypoints'
+            assert len(RIGHT_INDEX) == len(LEFT_INDEX), 'check left and right body keypoints'
             tmp_left = anns[:, LEFT_INDEX, :]
             tmp_right = anns[:, RIGHT_INDEX, :]
             anns[:, LEFT_INDEX, :] = tmp_right

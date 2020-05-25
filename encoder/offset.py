@@ -107,7 +107,7 @@ class OffsetMapGenerator(object):
         feature_maps = (offset_maps, scale_maps)
 
         # ----------------------------------------------------------------------------------#
-        # generate offset by sampling in the original input resolution space
+        # generate offset by sampling floating point positions in the original input resolution space
         self.put_connections(feature_maps, joints)
 
         return offset_maps, scale_maps
@@ -150,7 +150,8 @@ class OffsetMapGenerator(object):
             if y_min < 0:
                 y_min = 0
 
-            # this slice is not only speed up but crops keypoints off the image boarder
+            # this slice is not only to speed up (only compute the labels in needed areas,
+            # but crop keypoints off the image boarder.
             # slice crops the extended index of a numpy array and return empty array []
             slice_x = slice(x_min, x_max + 1)
             slice_y = slice(y_min, y_max + 1)
@@ -171,5 +172,6 @@ class OffsetMapGenerator(object):
 
             mask = offset_mesh_l < vector_l
 
+            # overlap the offset values on the basis of the offset lengths
             offset_patch[mask] = offset_mesh[mask]
             scale_patch[mask] = max(joint1[3], self.min_scale)
