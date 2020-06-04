@@ -1,4 +1,5 @@
 """Transform input data.
+ Import functions from this package can facilitate reference in other package.
 
 OpenCV-resize() regards the pixels lies at the center of cells in the image array.
 The origin (0, 0) of the coordinate system lies at the center of the op-left cell.

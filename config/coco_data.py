@@ -155,6 +155,45 @@ def vector_hflip(keypoints, skeleton, hflip):
     return flip_indices, reverse_direction
 
 
+def draw_skeletons():
+    import numpy as np
+    from visualization import show
+    coordinates = np.array([[
+        [0.0, 9.3, 2.0],  # 'nose',
+        [-0.5, 9.7, 2.0],  # 'left_eye',
+        [0.5, 9.7, 2.0],  # 'right_eye',
+        [-1.0, 9.5, 2.0],  # 'left_ear',
+        [1.0, 9.5, 2.0],  # 'right_ear',
+        [-2.0, 8.0, 2.0],  # 'left_shoulder',
+        [2.0, 8.0, 2.0],  # 'right_shoulder',
+        [-2.5, 6.0, 2.0],  # 'left_elbow',
+        [2.5, 6.2, 2.0],  # 'right_elbow',
+        [-2.5, 4.0, 2.0],  # 'left_wrist',
+        [2.5, 4.2, 2.0],  # 'right_wrist',
+        [-1.8, 4.0, 2.0],  # 'left_hip',
+        [1.8, 4.0, 2.0],  # 'right_hip',
+        [-2.0, 2.0, 2.0],  # 'left_knee',
+        [2.0, 2.1, 2.0],  # 'right_knee',
+        [-2.0, 0.0, 2.0],  # 'left_ankle',
+        [2.0, 0.1, 2.0],  # 'right_ankle',
+    ]])
+
+    keypoint_painter = show.KeypointPainter(show_box=False, color_connections=True,
+                                            markersize=1, linewidth=6)
+
+    with show.canvas('docs/skeleton_coco.png', figsize=(2, 5)) as ax:
+        ax.set_axis_off()
+        keypoint_painter.keypoints(ax, coordinates, skeleton=COCO_PERSON_SKELETON)
+
+    with show.canvas('docs/skeleton_kinematic_tree.png', figsize=(2, 5)) as ax:
+        ax.set_axis_off()
+        keypoint_painter.keypoints(ax, coordinates, skeleton=KINEMATIC_TREE_SKELETON)
+
+    with show.canvas('docs/skeleton_coco_redundant.png', figsize=(2, 5)) as ax:
+        ax.set_axis_off()
+        keypoint_painter.keypoints(ax, coordinates, skeleton=COCO_PERSON_WITH_REDUNDANT_SKELETON)
+
+
 def print_associations():
     print('number of limb connections: ', len(COCO_PERSON_SKELETON))
     for j1, j2 in COCO_PERSON_SKELETON:
@@ -166,6 +205,7 @@ if __name__ == '__main__':
     print(LEFT_INDEX)
     print(RIGHT_INDEX)
     print_associations()
+    draw_skeletons()
 
     heatmap_hflip(COCO_KEYPOINTS, HFLIP)
     vector_hflip(COCO_KEYPOINTS, COCO_PERSON_SKELETON, HFLIP)

@@ -6,7 +6,6 @@ import torchvision
 
 from data import transforms
 from data import CocoKeypoints
-from data.transforms import utils
 
 
 LOG = logging.getLogger(__name__)
@@ -66,17 +65,17 @@ def train_cli(parser):
     group = parser.add_argument_group('training parameters for warp affine')
     group.add_argument('--square-length', default=512, type=int,
                        help='square edge of input images')
-    group.add_argument('--stride', default=4, type=int,
-                       help='the ration of the input size to the output size')
+    group.add_argument('--strides', default=[], nargs='+', type=int,
+                       help='rations of the input to the output of encoder heads')
     group.add_argument('--flip-prob', default=0.5, type=float,
                        help='the probability to flip the input image')
     group.add_argument('--max-rotate', default=40, type=float,)
     group.add_argument('--min-scale', default=0.7, type=float,
-                       help='the lower bound of the relative'
+                       help='lower bound of the relative'
                             ' image scale during augmentation')
     group.add_argument('--max-scale', default=1.3, type=float)
     group.add_argument('--max-translate', default=50, type=int,
-                       help='the upper bound of shitting the image during augmentation')
+                       help='upper bound of shitting the image during augmentation')
     group.add_argument('--debug-affine-show', default=False, action='store_true',
                        help='show the transformed image and keyooints')
 
@@ -138,14 +137,14 @@ if __name__ == '__main__':  # for debug
     args.headnets=['heatmaps', 'offsets']
 
 
-    def test_augmentation_speed(train_client, show_image=True):
+    def test_augmentation_speed(data_client, show_image=True):
         start = time()
         batch = 0
-        for index in range(train_client.__len__()):
+        for index in range(data_client.__len__()):
             batch += 1
 
             image, anno, meta, mask_miss = [v for v in  # , offsets, mask_offset
-                                 train_client.__getitem__(index)]
+                                            data_client.__getitem__(index)]
             t = 2
             #
             # # show the generated ground truth
@@ -190,7 +189,7 @@ if __name__ == '__main__':  # for debug
     ]
     preprocess = transforms.Compose(preprocess_transformations)
 
-    target_transform = encoder.factory(args)
+    target_transform = encoder.factory(args, args.strides)
 
     val_client = CocoKeypoints(IMAGE_DIR_VAL, ANNOTATIONS_VAL,
                                preprocess=preprocess,

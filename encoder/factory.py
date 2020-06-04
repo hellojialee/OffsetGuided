@@ -29,7 +29,7 @@ def factory(args, strides=None):
     """ Build ground truth encoders.
     """
     # configure heatmap
-    if strides is None:
+    if not strides:
         strides = [4, 4, 4]
     HeatMaps.clip_thre = args.gaussian_clip_thre
     HeatMaps.sigma = args.sigma
@@ -64,7 +64,7 @@ def factory_head(head_name, square_length, stride):
                      'hmps',
                      'heatmap',
                      'heatmaps') or \
-       re.match('hmp[s]?([0-9]+)$', head_name) is not None:
+       re.match('hmp[s]?([0-9]+)$', head_name) is not None:  # +: repeat one or more times
 
         m = re.match('hmp[s]?([0-9]+)$', head_name)  # $ the end of string match
         if m is not None:
@@ -90,9 +90,12 @@ def factory_head(head_name, square_length, stride):
         elif head_name in ('omp16',):
             n_keypoints = 17
             OffsetMaps.skeleton = KINEMATIC_TREE_SKELETON
-        elif head_name in ('omp32',):  # todo: complete the settings
+        elif head_name in ('omp25',):
             n_keypoints = 17
             OffsetMaps.skeleton = COCO_PERSON_WITH_REDUNDANT_SKELETON
+        elif head_name in ('omp6', 'omps6'):
+            n_keypoints = 17
+            OffsetMaps.skeleton = REDUNDANT_CONNECTIONS
         else:
             raise Exception('unknown skeleton type of head')
 
@@ -100,3 +103,4 @@ def factory_head(head_name, square_length, stride):
         return OffsetMaps(square_length, stride)
         # 构造并返回Paf，用于生成ground truth paf
     raise Exception('unknown head to create an encoder: {}'.format(head_name))
+
