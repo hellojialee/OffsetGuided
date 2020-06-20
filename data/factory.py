@@ -1,3 +1,6 @@
+"""Dataloader and
+Configurations for data preparations and transformations"""
+
 import copy
 import logging
 import os
@@ -45,7 +48,7 @@ class DataPrefetcher():
         return batch
 
 
-def train_cli(parser):
+def data_cli(parser):
     group = parser.add_argument_group('dataset and loader')
     group.add_argument('--train-annotations', default=ANNOTATIONS_TRAIN)
     group.add_argument('--train-image-dir', default=IMAGE_DIR_TRAIN)
@@ -65,8 +68,6 @@ def train_cli(parser):
     group = parser.add_argument_group('training parameters for warp affine')
     group.add_argument('--square-length', default=512, type=int,
                        help='square edge of input images')
-    group.add_argument('--strides', default=[], nargs='+', type=int,
-                       help='rations of the input to the output of encoder heads')
     group.add_argument('--flip-prob', default=0.5, type=float,
                        help='the probability to flip the input image')
     group.add_argument('--max-rotate', default=40, type=float,)
@@ -80,7 +81,7 @@ def train_cli(parser):
                        help='show the transformed image and keyooints')
 
 
-def train_factory(args, preprocess, target_transforms):
+def data_factory(args, preprocess, target_transforms):
     if args.loader_workers is None:
         args.loader_workers = 0
 
@@ -131,10 +132,17 @@ if __name__ == '__main__':  # for debug
         # RawTextHelpFormatter # --help text without default values, e.g., gaussian threshold
     )
 
-    train_cli(parser)
-    encoder.cli(parser)
+    data_cli(parser)
+    encoder.encoder_cli(parser)
     args = parser.parse_args()
-    args.headnets=['heatmaps', 'offsets']
+    args.headnets=['heatmaps', 'offsets']  # fixme: 训练中应该先运行net_cil然后再运行encoder_cli
+
+    log_level = logging.WARNING  # logging.INFO
+    # set RootLogger
+    logging.basicConfig(level=log_level)
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+
+    LOG.info('Test the data loader')
 
 
     def test_augmentation_speed(data_client, show_image=True):
@@ -143,22 +151,20 @@ if __name__ == '__main__':  # for debug
         for index in range(data_client.__len__()):
             batch += 1
 
-            image, anno, meta, mask_miss = [v for v in  # , offsets, mask_offset
+            image, anno, meta, mask_miss = [v for v in
                                             data_client.__getitem__(index)]
-            t = 2
-            #
+
             # # show the generated ground truth
             # if show_image:
-            #     # show_labels = cv2.resize(meta.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
-            #     # # offsets = cv2.resize(offsets.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
-            #     # mask_miss = np.repeat(mask_miss.transpose((1, 2, 0)), 3, axis=2)
-            #     # mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
-            #     # image = cv2.resize(image, mask_miss.shape[:2], interpolation=cv2.INTER_NEAREST)
-            #     plt.imshow(image[:, :, [2, 1, 0]])  # Opencv image format: BGR
-            #     plt.imshow(meta.transpose((1, 2, 0))[:, :, 20], alpha=0.5)  # mask_all
-            #     # plt.imshow(show_labels[:, :, 3], alpha=0.5)  # mask_all
-            #     plt.show()
-            #     t = 2
+            # show_labels = cv2.resize(meta.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
+            # # offsets = cv2.resize(offsets.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
+            # mask_miss = np.repeat(mask_miss.transpose((1, 2, 0)), 3, axis=2)
+            # mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
+            # image = cv2.resize(image, mask_miss.shape[:2], interpolation=cv2.INTER_NEAREST)
+            # plt.imshow(image[:, :, [2, 1, 0]])  # Opencv image format: BGR
+            # plt.imshow(meta.transpose((1, 2, 0))[:, :, 20], alpha=0.5)  # mask_all
+            # # plt.imshow(show_labels[:, :, 3], alpha=0.5)  # mask_all
+            # plt.show()
         print("produce %d samples per second: " % (batch / (time() - start)))  # about 70~80 FPS on MBP-13
 
 
@@ -174,7 +180,7 @@ if __name__ == '__main__':  # for debug
 
     preprocess_transformations = [
         transforms.NormalizeAnnotations(),
-        transforms.WarpAffineTransforms(args.square_length, aug_params=args, debug_show=True),
+        transforms.WarpAffineTransforms(args.square_length, aug_params=args, debug_show=False),
         transforms.RandomApply(transforms.AnnotationJitter(), 0.1),
     ]
 
@@ -189,7 +195,7 @@ if __name__ == '__main__':  # for debug
     ]
     preprocess = transforms.Compose(preprocess_transformations)
 
-    target_transform = encoder.factory(args, args.strides)
+    target_transform = encoder.encoder_factory(args, args.strides)
 
     val_client = CocoKeypoints(IMAGE_DIR_VAL, ANNOTATIONS_VAL,
                                preprocess=preprocess,
@@ -200,4 +206,4 @@ if __name__ == '__main__':  # for debug
     print(timeit.timeit(stmt='test_augmentation_speed(val_client, False)',
                         setup="from __main__ import test_augmentation_speed;"
                               "from __main__ import val_client",
-                        number=2))  # run fun number times
+                        number=3))  # run for number times

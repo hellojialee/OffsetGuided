@@ -1,3 +1,4 @@
+
 from torch import nn
 from torch.autograd import Function
 import sys
@@ -52,7 +53,8 @@ class BasicResidual(nn.Module):
     """
     Basic block used in ResNet, CornerNet, CenterNet, etc.
     Used as the basic block to replace 3*3 convolution,
-    increasing the shortcuts in network
+    increasing the shortcuts in network,
+    but they double the feature map channels
     """
 
     def __init__(self, inp_dim, out_dim, stride=1, bn=True, relu=True):
@@ -227,7 +229,7 @@ class Backbone(nn.Module):
 
 
 class Hourglass(nn.Module):
-    """Instantiate an n order Hourglass Network block using recursive trick."""
+    """Instantiate a fourth-order Hourglass Network block using recursive trick."""
 
     def __init__(self, depth, nFeat, increase=128, bn=False, resBlock=Residual,
                  convBlock=Conv):

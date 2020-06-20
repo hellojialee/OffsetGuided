@@ -9,8 +9,7 @@ LOG = logging.getLogger(__name__)
 
 
 class OffsetMaps(object):
-    """
-    Offset map between adjacent keypoints and scale map of keypoints.
+    """Offset map between adjacent keypoints and scale map of keypoints.
 
     Attributes:
         input_size (int, list): the input image size of (w, h) or square length.
@@ -36,8 +35,8 @@ class OffsetMaps(object):
             print(f'network stride: {self.stride: .3f} is not a integer')
 
         omps = OffsetMapGenerator(self.input_size, self.stride,
-                                     self.fill_scale_size, self.min_scale,
-                                     self.skeleton)
+                                  self.fill_scale_size, self.min_scale,
+                                  self.skeleton)
 
         offset_maps, scale_maps = omps.create_offsetmaps(anns, meta)
 
@@ -69,8 +68,7 @@ class OffsetMaps(object):
 
 
 class OffsetMapGenerator(object):
-    """
-    Generate navigator offset and scale feature map of keypoints.
+    """Generate navigator offset and scale feature map of keypoints.
     """
 
     def __init__(self, input_size, stride, fill_scale_size, min_scale, skeleton):

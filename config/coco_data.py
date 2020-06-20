@@ -1,6 +1,4 @@
-"""
-Configurations for keypoint, skeleton and keypoint jitter sigmas.
-"""
+"""Configurations for keypoint, skeleton and keypoint jitter sigmas"""
 
 
 COCO_PERSON_SKELETON = [

@@ -17,6 +17,7 @@ class HeatMaps(object):
     """
     clip_thre = 0.01  # Gaussian distribution below this value will be set to zero
     sigma = 9  # standard deviation of Gaussian distribution
+    n_keypoints = 17
 
     def __init__(self, input_size, stride, *, include_reverse=False):
         assert isinstance(input_size, (int, list)), input_size
@@ -33,6 +34,10 @@ class HeatMaps(object):
         if not isinstance(self.stride, int):
             LOG.warning('network stride: %.3f is not a integer', self.stride)
 
+        assert self.n_keypoints == meta['joint_num'], \
+            'not implemented! n_keypoints set by command parse args mismatches the COCO config '
+
+        # speed dose ont change even if we initialize the HeatMapGenerator in __init__()
         hmps = HeatMapGenerator(self.input_size, self.stride,
                                 self.sigma, self.clip_thre)
 

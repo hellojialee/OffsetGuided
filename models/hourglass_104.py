@@ -1,18 +1,16 @@
+"""Official Hourglass-104 model used by CornerNet, CenterNet, etc"""
 # ------------------------------------------------------------------------------
 # This code is base on
 # CornerNet (https://github.com/princeton-vl/CornerNet)
 # Copyright (c) 2018, University of Michigan
 # Licensed under the BSD 3-Clause License
 # ------------------------------------------------------------------------------
-
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-import numpy as np
 import torch
 import torch.nn as nn
+import logging
+import os
+
+LOG = logging.getLogger(__name__)
 
 
 class convolution(nn.Module):
@@ -20,7 +18,8 @@ class convolution(nn.Module):
         super(convolution, self).__init__()
 
         pad = (k - 1) // 2
-        self.conv = nn.Conv2d(inp_dim, out_dim, (k, k), padding=(pad, pad), stride=(stride, stride), bias=not with_bn)
+        self.conv = nn.Conv2d(inp_dim, out_dim, (k, k), padding=(pad, pad),
+                              stride=(stride, stride), bias=not with_bn)
         self.bn = nn.BatchNorm2d(out_dim) if with_bn else nn.Sequential()
         self.relu = nn.ReLU(inplace=True)
 
@@ -52,15 +51,18 @@ class residual(nn.Module):
     def __init__(self, k, inp_dim, out_dim, stride=1, with_bn=True):
         super(residual, self).__init__()
 
-        self.conv1 = nn.Conv2d(inp_dim, out_dim, (3, 3), padding=(1, 1), stride=(stride, stride), bias=False)
+        self.conv1 = nn.Conv2d(inp_dim, out_dim, (3, 3), padding=(1, 1),
+                               stride=(stride, stride), bias=False)
         self.bn1 = nn.BatchNorm2d(out_dim)
         self.relu1 = nn.ReLU(inplace=True)
 
-        self.conv2 = nn.Conv2d(out_dim, out_dim, (3, 3), padding=(1, 1), bias=False)
+        self.conv2 = nn.Conv2d(out_dim, out_dim, (3, 3), padding=(1, 1),
+                               bias=False)
         self.bn2 = nn.BatchNorm2d(out_dim)
 
         self.skip = nn.Sequential(
-            nn.Conv2d(inp_dim, out_dim, (1, 1), stride=(stride, stride), bias=False),
+            nn.Conv2d(inp_dim, out_dim, (1, 1), stride=(stride, stride),
+                      bias=False),
             nn.BatchNorm2d(out_dim)
         ) if stride != 1 or inp_dim != out_dim else nn.Sequential()
         self.relu = nn.ReLU(inplace=True)
@@ -132,7 +134,8 @@ class kp_module(nn.Module):
             self, n, dims, modules, layer=residual,
             make_up_layer=make_layer, make_low_layer=make_layer,
             make_hg_layer=make_layer, make_hg_layer_revr=make_layer_revr,
-            make_pool_layer=make_pool_layer, make_unpool_layer=make_unpool_layer,
+            make_pool_layer=make_pool_layer,
+            make_unpool_layer=make_unpool_layer,
             make_merge_layer=make_merge_layer, **kwargs
     ):
         super(kp_module, self).__init__()
@@ -195,8 +198,10 @@ class exkp(nn.Module):
             make_tag_layer=make_kp_layer, make_regr_layer=make_kp_layer,
             make_up_layer=make_layer, make_low_layer=make_layer,
             make_hg_layer=make_layer, make_hg_layer_revr=make_layer_revr,
-            make_pool_layer=make_pool_layer, make_unpool_layer=make_unpool_layer,
-            make_merge_layer=make_merge_layer, make_inter_layer=make_inter_layer,
+            make_pool_layer=make_pool_layer,
+            make_unpool_layer=make_unpool_layer,
+            make_merge_layer=make_merge_layer,
+            make_inter_layer=make_inter_layer,
             kp_layer=residual
     ):
         super(exkp, self).__init__()
@@ -276,7 +281,7 @@ class exkp(nn.Module):
             outs.append(cnv)  #
 
             # out = {}
-            # for head in self.heads:
+            # for head in self.heads:  # build heatmap head, regress head, etc
             #     layer = self.__getattr__(head)[ind]
             #     y = layer(cnv)
             #     out[head] = y
@@ -286,6 +291,7 @@ class exkp(nn.Module):
             if ind < self.nstack - 1:
                 inter = self.inters_[ind](inter) + self.cnvs_[ind](cnv)
                 inter = self.relu(inter)
+                # official hourglass-104 did'nt feed the supervised heatmaps of stack 1 to stack 2
                 inter = self.inters[ind](inter)
         return outs
 
@@ -296,13 +302,14 @@ def make_hg_layer(kernel, dim0, dim1, mod, layer=convolution, **kwargs):
     return nn.Sequential(*layers)
 
 
-class HourglassNet(exkp):
-    def __init__(self, heads, num_stacks=2):
-        n = 5
+class Hourglass104(exkp):
+    def __init__(self, heads=None, num_stacks=2):
+        # head is useless for we dropped it in code
+        n = 5  # recursive building 5th-order hg
         dims = [256, 256, 384, 384, 384, 512]
         modules = [2, 2, 2, 2, 2, 4]
 
-        super(HourglassNet, self).__init__(
+        super(Hourglass104, self).__init__(
             n, num_stacks, dims, modules, heads,
             make_tl_layer=None,
             make_br_layer=None,
@@ -313,21 +320,24 @@ class HourglassNet(exkp):
 
 
 def get_large_hourglass_net(num_layers, heads, head_conv):
-    model = HourglassNet(heads, 2)
+    model = Hourglass104(heads, 2)  # hourglass-104 has 2 stacks
     return model
 
 
 def create_model(heads, head_conv):
-  num_layers = 0
-  model = get_large_hourglass_net(num_layers=num_layers, heads=heads, head_conv=head_conv)
-  return model
+    num_layers = 0
+    model = get_large_hourglass_net(num_layers=num_layers, heads=heads,
+                                    head_conv=head_conv)
+    return model
 
 
 def load_model(model, model_path, optimizer=None, resume=False,
                lr=None, lr_step=None):
     start_epoch = 0
-    checkpoint = torch.load(model_path, map_location=torch.device('cpu'))  # lambda storage, loc: storage
-    print('loaded {}, epoch {}'.format(model_path, checkpoint['epoch']))
+    # map_location=lambda storage, loc: storage
+    checkpoint = torch.load(model_path, map_location=torch.device('cpu'))
+    LOG.info('loaded %s, checkpoint at epoch %s', model_path,
+             checkpoint['epoch'])
     state_dict_ = checkpoint['state_dict']
     state_dict = {}
 
@@ -376,35 +386,46 @@ def load_model(model, model_path, optimizer=None, resume=False,
     if optimizer is not None:
         return model, optimizer, start_epoch
     else:
-        return model
+        start_epoch = checkpoint['epoch']
+        return model, None, start_epoch
 
 
+if __name__ == '__main__':
+    from models import save_model
 
-if __name__=='__main__':
-    n       = 5
-    dims    = [256, 256, 384, 384, 384, 512]
-    modules = [2, 2, 2, 2, 2, 4]
-    out_dim = 80
-
-    model = get_large_hourglass_net('hm', None, None)
+    model = get_large_hourglass_net(None, None, None)
     model.eval()
-    img = torch.rand(1, 3, 511, 511)
-    model = load_model(model, '/Users/lijia/Downloads/multi_pose_hg_3x.pth')
-    # out = model(img)
 
+    # Notice, hourglass-104 down-samples the input 5 TIMES! 512*512-->4*4-->512*512
+    # from torchsummary import summary
+    # summary(model, (3, 512, 512), device='cpu')
+
+    img = torch.rand(1, 3, 512, 512)
+    out = model(img)
+    print(len(out))
+    # hourglass-104 use (img - mean) / std as input
+
+    # # convert pre-trained parameters
+    # model, _, epoch = load_model(model, '../weights/multi_pose_hg_3x.pth')
+    # train_loss = float('inf')
+    # save_model('../weights/hourglass_104_renamed.pth', epoch, train_loss, model)
+
+
+    # ############## Export ONNX model ##############
     # import torch.onnx
     #
     # torch.onnx.export(model, img, "hourglass-104.onnx")
     # # ############################# netron --host=localhost --port=8080
-    #
+
     # # # # ##############  Count the FLOPs of your PyTorch model  ##########################
-    from thop import profile
-    from thop import clever_format
-    flops, params = profile(model, inputs=(img,))
-    flops, params = clever_format([flops, params], "%.3f")
-    print(flops, params)
+    # from thop import profile
+    # from thop import clever_format
+    #
+    # flops, params = profile(model, inputs=(img,))
+    # flops, params = clever_format([flops, params], "%.3f")
+    # print(flops, params)
     # ---------------------------------------- #
-    # Hourglass_104 234.269G, 187.700M
+    # Hourglass_104 234.511G 187.700M
     # Ours 4-stage IMHN 269.882G, 128.999M
     # Ours 3-stage IMHN 206.546G, 96.676M
     # ---------------------------------------- #
