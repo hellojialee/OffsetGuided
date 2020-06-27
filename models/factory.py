@@ -1,6 +1,6 @@
 import logging
 import torch
-from models import heads, networks
+from models import heads, networks, losses
 import argparse
 
 LOG = logging.getLogger(__name__)
@@ -28,47 +28,70 @@ def net_cli(parser):
     group.add_argument('--strides', default=[4, 4], nargs='+', type=int,
                        help='rations of the input to the output of basenet, '
                             'also the strides of all sub headnets')
+    group.add_argument('--include-spread', default=False, action='store_true',
+                       help='add conv layers to regress the spread_b '
+                            'of Laplace distribution, you should set it to '
+                            'True if you chose laplace loss')
+    group.add_argument('--include-background', default=False, action='store_true',
+                       help='include the heatmap of background channel')
+    group.add_argument('--include-scale', default=False, action='store_true',
+                       help='add cone layers to regress the keypoint scales '
+                            'in separate channels')
 
     group = parser.add_argument_group('loss configuration')
-    group.add_argument('--lambdas', default=[1, 1, 1],
+    group.add_argument('--lambdas', default=[1, 1, 1, 1],
                        type=float, nargs='+',
                        help='learning task wights')
     group.add_argument('--stack-weights', default=[1, 1],
                        type=float, nargs='+',
                        help='loss weights of different stacks')
-    group.add_argument('--hmp-loss', default='l2',
-                       choices=['l2', 'focall2'],
+    group.add_argument('--hmp-loss', default='focal_l2_loss',
+                       choices=['l2_loss', 'focal_l2_loss'],
                        help='loss for heatmap regression')
-    group.add_argument('--tau', default=0.01, type=float,
-                       help='background threshold in focal L2 loss')
-    group.add_argument('--offset-loss', default='l1',
-                       choices=['smoothl1', 'l1', 'laplace'],
+    group.add_argument('--offset-loss', default='offset_laplace_loss',
+                       choices=['offset_l1_loss', 'offset_laplace_loss'],
                        help='loss for offeset regression')
-    group.add_argument('--scale-loss', default='l1',
-                       choices=['smoothl1', 'l1', 'laplace'],
+    group.add_argument('--scale-loss', default='scale_l1_loss',
+                       choices=['scale_l1_loss'],
                        help='loss for keypoint scale regression')
 
 
-def net_factory(args):
-    # Build the whole model from scratch
+def model_factory(args):
+    """Build the whole model from scratch from the args"""
+
     if 'hourglass' in args.basenet:
-        basenet, headnets = hourglass_from_scratch(
-            args.basenet, args.headnets, args.strides, args.pretrained)
-    # elif: implement other network structures
+        # build the base network
+        basenet, n_stacks, stride, feature_dim = hourglass_from_scratch(
+            args.basenet, args.pretrained)
 
-    else:
-        raise Exception(f'unknown base network: {args.base_name}')
+        # build the head networks
+        assert stride == args.strides[0], 'strides mismatch'
+        headnets = heads.headnets_factory(
+            args.headnets,
+            n_stacks,
+            args.strides,
+            feature_dim,
+            args.include_spread,
+            args.include_background,
+            args.include_scale)
+        # no pre-trained headnets, so we randomly initialize them
+        headnets = [networks.initialize_weights(h) for h in headnets]
 
-    lossnet = torch.nn.Sequential
+        lossfuncs = losses.lossfuncs_factory(
+            args.headnets, n_stacks, args.stack_weights,
+            args.hmp_loss, args.offset_loss, args.scale_loss)
+        model = networks.NetworkWrap(basenet, headnets)
 
-    # modelpkg = networks.Network(basenet, headnets, lossnet)  # todo: to complete the loss
+        return model, lossfuncs
 
-    return basenet, headnets # modelpkg
+    # if 'merge_hourglass' in args.basenet: implement other network structures
+
+    raise Exception(f'unknown base network: {args.base_name}')
 
 
-def hourglass_from_scratch(base_name, head_names, head_strides, pretrained):
-    basenet, n_stacks, stride, feature_dim = networks.build_basenet(base_name)
-    assert stride == head_strides[0], 'strides mismatch'
+def hourglass_from_scratch(base_name, pretrained):
+    basenet, n_stacks, stride, feature_dim = networks.basenet_factory(
+        base_name)
     # initialize model params in-place
     basenet = networks.initialize_weights(basenet)
 
@@ -76,15 +99,10 @@ def hourglass_from_scratch(base_name, head_names, head_strides, pretrained):
         basenet, _, _ = networks.load_model(
             basenet, '../weights/hourglass_104_renamed.pth')
 
-    headnets = heads.headnets_factory(
-        head_names, n_stacks, stride, feature_dim)
-    # no pre-trained headnets, so we randomly initialize them
-    headnets = [networks.initialize_weights(h) for h in headnets]
-
-    return basenet, headnets
+    return basenet, n_stacks, stride, feature_dim
 
 
-def parse_args():
+def debug_parse_args():
     parser = argparse.ArgumentParser(description='Test keypoints network')
     # general
     parser.add_argument('--for-debug',
@@ -93,23 +111,43 @@ def parse_args():
                         help='this parse is only for debug the code')
 
     net_cli(parser)
-    args = parser.parse_args('--for-debug '.split())
-
+    args = parser.parse_args('--for-debug  --include-spread --include-background --include-scale'.split())
     return args
 
 
 if __name__ == '__main__':
     # for debug
 
-    args = parse_args()
-    basenet, headnets = net_factory(args)
-    model = networks.NetworkEval(basenet, headnets)
+    log_level = logging.DEBUG  # logging.INFO
+    # set RootLogger
+    logging.basicConfig(level=log_level)
+
+    args = debug_parse_args()
+    model, lossfuns = model_factory(args)
     model.cuda()
     model.eval()  # 只有被正确注册的参数和子网络才会被自动移动到cuda上
 
     # for name, parameters in basenet.named_parameters():
     #     print(parameters)
-
-    img = torch.rand(1, 3, 512, 512).cuda()
+    img = torch.rand(2, 3, 512, 512).cuda()
     out = model(img)
+
     print(len(out))
+
+    hmp_loss, omp_loss = lossfuns
+    gt_hmps = torch.rand(2, 17, 128, 128).cuda()
+    gt_bghmp = torch.rand(2, 1, 128, 128).cuda()
+    mask_miss = torch.ones((2, 1, 128, 128)).cuda()
+    mask_miss = mask_miss > 0
+
+    gt_offsets = torch.rand(2, 38, 128, 128).cuda()
+    gt_scales = torch.rand(2, 17, 128, 128).cuda()
+
+    loss1 = hmp_loss(out[0], gt_hmps, gt_bghmp, mask_miss)
+    loss2 = omp_loss(out[1], gt_offsets, gt_scales, mask_miss)
+
+    print(loss1, loss2)
+    loss = sum(loss1) + sum(loss2)
+    loss.backward()
+    print('done')
+

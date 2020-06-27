@@ -8,34 +8,6 @@ from models import Hourglass104, Hourglass4Stage
 LOG = logging.getLogger(__name__)
 
 
-class IMHNOpt:
-    nstack = 4  # stacked number of hourglass
-    hourglass_inp_dim = 256
-    increase = 128  # increased channels once down-sampling in the hourglass networks
-
-
-def build_basenet(basenet_name):
-    """
-    Args:
-        basenet_name:
-
-    Returns:
-    tuple: BaseNetwork, n_stacks, stride, oup_dim
-
-    """
-    assert basenet_name in ['hourglass104', 'hourglass4stage'], \
-        f'{basenet_name} is not implemented.'
-
-    if 'hourglass104' in basenet_name:
-        model = Hourglass104(None, 2)
-        return model, 2, 4, 256
-
-    if 'hourglass4stage' in basenet_name:
-        net_opt = IMHNOpt()
-        out_dim = 50
-        raise Exception('Unknown base network in {}'.format(basenet_name))
-
-
 def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
                resume_optimizer=True, optimizer2cuda=True):
     """
@@ -67,7 +39,7 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
     state_dict = OrderedDict()  # loaded pre-trained model weight
 
     # convert parallel/distributed model to single model
-    for k, v in state_dict_.items():  # Fixme keep consistent with our model
+    for k, v in state_dict_.items():  # Fixme: keep consistent with our model
         if ('before_regression' in k or 'offset' in k) and drop_layers:  #
             continue
         if k.startswith('module') and not k.startswith('module_list'):
@@ -170,49 +142,10 @@ def initialize_weights(model):
     return model
 
 
-class Network(torch.nn.Module):
-    """
-    Wrap the basenet module as well as the loss module into a single network.
-    This trick can balance the computation among GPUs in data parallel cases.
-
-    Attributes:
-        basenet: backbone network, output feature maps to regress targets.
-        headnet: heads to regress targets.
-        loss:
-        use_swa: Stochastic Weight Averaging.
-    """
-
-    def __init__(self, basenet, headnets, loss, use_swa=False):
-        super(Network, self).__init__()
-        self.basenet = basenet
-        # Notice!  subnets in list or dict must be warped
-        # by ModuleList to register trainable params
-        self.headnets = torch.nn.ModuleList(headnets)
-        self.criterion = loss
-        self.swa = use_swa
-
-    def forward(self, *args):
-        inp_imgs = args[0]
-        target_tuple = args[1:]
-        feature_tuple = self.basenet(inp_imgs)
-        output_tuple = self.headnets(feature_tuple)
-
-        if not self.training:  # testing mode
-            loss = self.criterion(output_tuple, target_tuple)
-            return output_tuple, loss
-
-        else:  # training mode
-            if not self.swa:
-                loss = self.criterion(output_tuple, target_tuple)
-
-                return loss
-            else:  # SWA, compute loss elsewhere
-                return output_tuple
-
-
-class NetworkEval(torch.nn.Module):
+class NetworkWrap(torch.nn.Module):
+    """Wrap the basenet and headnets into a single module."""
     def __init__(self, basenet, headnets):
-        super(NetworkEval, self).__init__()
+        super(NetworkWrap, self).__init__()
         self.basenet = basenet
         # Notice!  subnets in list or dict must be warped
         # by ModuleList to register trainable params
@@ -224,10 +157,30 @@ class NetworkEval(torch.nn.Module):
         feature_tuple = self.basenet(img_tensor)
         head_outputs = [hn(feature_tuple) for hn in self.headnets]
 
-        if not self.training:
-            # output will be concatenated along batch channel
-            # automatically after the parallel model return
-            return head_outputs
-        else:
-            raise ValueError('\nOnly EVAL Mode is supported !!')
+        return head_outputs
 
+
+def basenet_factory(basenet_name):
+    """
+    Args:
+        basenet_name:
+
+    Returns:
+    tuple: BaseNetwork, n_stacks, stride, oup_dim
+
+    """
+    assert basenet_name in ['hourglass104', 'hourglass4stage'], \
+        f'{basenet_name} is not implemented.'
+
+    if 'hourglass104' in basenet_name:
+        model = Hourglass104(None, 2)
+        return model, 2, 4, 256
+
+    if 'hourglass4stage' in basenet_name:
+        class IMHNOpt:
+            nstack = 4  # stacked number of hourglass
+            hourglass_inp_dim = 256
+            increase = 128  # increased channels once down-sampling through networks
+        net_opt = IMHNOpt()
+        out_dim = 50
+        raise Exception('Unknown base network in {}'.format(basenet_name))

@@ -22,7 +22,7 @@ class CocoKeypoints(torch.utils.data.Dataset):
     Based on `torchvision.dataset.CocoDetection`.
     `MS Coco Detection <http://mscoco.org/dataset/#detections-challenge2016>`_ Dataset.
 
-    Attributes:
+    Args:
         img_dir (string): root directory where images are downloaded to.
         annFile (string): path to json annotation file.
         preprocess (callable, optional): a function/transform that takes in an RGB numpy image
@@ -33,6 +33,10 @@ class CocoKeypoints(torch.utils.data.Dataset):
         all_images (bool, optional): whether or not to use all the images.
         all_persons (bool, optional): only if ``all_images`` is False, then this works.
             Using all images containing persons.
+
+    Attributes:
+        cat_ids (list): filtered category ids
+        ids (list): images filtered by cat_ids
     """
 
     def __init__(self, img_dir, annFile, *,
@@ -123,11 +127,9 @@ class CocoKeypoints(torch.utils.data.Dataset):
 
         # transform_targets generates ground truth
         if self.target_transforms is not None:
-            targets = [t(anns, meta, mask_miss) for t in self.target_transforms]
-            anns = [t[0] for t in targets]  # unpack
-            mask_miss = [t[1] for t in targets]
+            anns = [t(anns, meta, mask_miss) for t in self.target_transforms]
 
-        return image, anns, meta, mask_miss
+        return image, anns, meta
 
     def __len__(self):
         return len(self.ids)
@@ -197,7 +199,7 @@ class CocoKeypoints(torch.utils.data.Dataset):
 
 class ImageList(torch.utils.data.Dataset):
     """
-     Attributes:
+     Args:
         image_paths (list): a list of image paths
         preprocess (Preprocess):  preprocessing the input image
     """

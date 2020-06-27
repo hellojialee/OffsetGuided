@@ -4,7 +4,6 @@ import math
 import logging
 import torch
 
-
 LOG = logging.getLogger(__name__)
 
 
@@ -12,14 +11,16 @@ class HeatMaps(object):
     """
     Gaussian heatmap of keypoints.
 
-    Attributes:
+    Args:
         input_size (int, list): the input image size of (w, h) or square length.
+        include_background (bool): include the reversed background heatmap or not
     """
     clip_thre = 0.01  # Gaussian distribution below this value will be set to zero
     sigma = 9  # standard deviation of Gaussian distribution
     n_keypoints = 17
+    include_background = True  # background heatmap
 
-    def __init__(self, input_size, stride, *, include_reverse=False):
+    def __init__(self, input_size, stride):
         assert isinstance(input_size, (int, list)), input_size
         assert stride != 0, 'stride can not be zero'
         self.input_size = input_size if isinstance(input_size, list) \
@@ -27,7 +28,6 @@ class HeatMaps(object):
         # ratio of output length to input length, used by mask_miss
         self.in_out_scale = 1 / stride
         self.stride = stride
-        self.include_reverse = include_reverse
 
     def __call__(self, anns, meta, mask_miss):
         assert meta['width_height'][0] == self.input_size[0], 'raw data!'
@@ -47,7 +47,7 @@ class HeatMaps(object):
                                fx=self.in_out_scale, fy=self.in_out_scale,
                                interpolation=cv2.INTER_CUBIC).astype(np.float32) / 255
         # mask_miss area marked by 0.
-        mask_miss = (mask_miss > 0.5).astype(np.float32)
+        mask_miss = (mask_miss > 0.5)  # .astype(np.float32)  bool mask_miss
 
         # # for IDE debug only
         # import matplotlib.pyplot as plt
@@ -63,21 +63,18 @@ class HeatMaps(object):
                   mask_miss.shape[1], mask_miss.shape[0])
 
         # Pytorch needs N*C*H*W format
-        if self.include_reverse:
+        if self.include_background:
             hmp_reverse = 1 - np.amax(heatmaps, axis=2)
 
             return (
-                (
-                    torch.from_numpy(heatmaps.transpose((2, 0, 1))),
-                    torch.from_numpy(hmp_reverse[None, ...])
-                ),
+                torch.from_numpy(heatmaps.transpose((2, 0, 1))),
+                torch.from_numpy(hmp_reverse[None, ...]),
                 torch.from_numpy(mask_miss[None, ...])
             )
         else:
             return (
-                (
-                    torch.from_numpy(heatmaps.transpose((2, 0, 1))),
-                ),
+                torch.from_numpy(heatmaps.transpose((2, 0, 1))),
+                torch.tensor([]),
                 torch.from_numpy(mask_miss[None, ...])
             )
 
@@ -86,6 +83,7 @@ class HeatMapGenerator(object):
     """
     Generate the keypoint heatmaps and keypoint scale feature map.
     """
+
     def __init__(self, input_size, stride, sigma, clip_thre):
 
         self.in_w = input_size[0]
@@ -103,7 +101,7 @@ class HeatMapGenerator(object):
         self.out_h = self.in_h // stride
 
         LOG.info('Input image size: %d*%d, network output size: %d*%d',
-                  self.in_w, self.in_h, self.out_w, self.out_h)
+                 self.in_w, self.in_h, self.out_w, self.out_h)
 
         # mapping coordinates into original input with cell center alignment.
         self.grid_x = np.arange(self.out_w) * stride + stride / 2 - 0.5  # x -> width
@@ -183,4 +181,3 @@ class HeatMapGenerator(object):
             patch = heatmaps[slice_y, slice_x, layer]
             mask = exp > patch
             patch[mask] = exp[mask]
-

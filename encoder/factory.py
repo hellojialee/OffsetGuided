@@ -33,10 +33,12 @@ def encoder_factory(args, strides=None):
         strides = [4, 4, 4]
     HeatMaps.clip_thre = args.gaussian_clip_thre
     HeatMaps.sigma = args.sigma
+    HeatMaps.include_background = args.include_background  # defined in head.py
 
     # configure scalemap
     OffsetMaps.fill_scale_size = args.fill_scale_size
     OffsetMaps.min_scale = args.min_scale
+    OffsetMaps.include_scale = args.include_scale  # defined in head.py
 
     return factory_heads(args.headnets, args.square_length, strides)
 

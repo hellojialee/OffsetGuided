@@ -291,7 +291,9 @@ class exkp(nn.Module):
             if ind < self.nstack - 1:
                 inter = self.inters_[ind](inter) + self.cnvs_[ind](cnv)
                 inter = self.relu(inter)
-                # official hourglass-104 did'nt feed the supervised heatmaps of stack 1 to stack 2
+                #  Official hourglass-104 did'nt feed the supervised heatmaps of stack 1 to stack 2
+                #   Maybe we should feed the heatmaps into the later stages? However,
+                #   CornerNet says adding back the intermediate predictions hurts the net performance
                 inter = self.inters[ind](inter)
         return outs
 
@@ -391,6 +393,8 @@ def load_model(model, model_path, optimizer=None, resume=False,
 
 
 if __name__ == '__main__':
+    # for debug
+
     from models import save_model
 
     model = get_large_hourglass_net(None, None, None)

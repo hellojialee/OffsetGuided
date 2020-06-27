@@ -98,29 +98,6 @@ HFLIP = {
 }
 
 
-DENSER_COCO_PERSON_SKELETON = [   # fixme: index form 0
-    (1, 2), (1, 3), (2, 3), (1, 4), (1, 5), (4, 5),
-    (1, 6), (1, 7), (2, 6), (3, 7),
-    (2, 4), (3, 5), (4, 6), (5, 7), (6, 7),
-    (6, 12), (7, 13), (6, 13), (7, 12), (12, 13),
-    (6, 8), (7, 9), (8, 10), (9, 11), (6, 10), (7, 11),
-    (8, 9), (10, 11),
-    (10, 12), (11, 13),
-    (10, 14), (11, 15),
-    (14, 12), (15, 13), (12, 15), (13, 14),
-    (12, 16), (13, 17),
-    (16, 14), (17, 15), (14, 17), (15, 16),
-    (14, 15), (16, 17),
-]
-
-
-DENSER_COCO_PERSON_CONNECTIONS = [
-    c
-    for c in DENSER_COCO_PERSON_SKELETON
-    if c not in COCO_PERSON_SKELETON
-]
-
-
 def heatmap_hflip(keypoints, hflip):
     flip_indices = list([
         keypoints.index(hflip[kp_name]) if kp_name in hflip else kp_i

@@ -40,7 +40,7 @@ class WarpAffineTransforms(Preprocess):
     We use OpenCV WarpAffine method to efficiently transform the images,
     labels, and keypoints during training.
 
-    Attributes:
+    Args:
         dst_size (int, list): the dst input image size of (width, height) or square length.
         aug_params (Namespace, Class, None): augmentation params used in data transformations.
     """

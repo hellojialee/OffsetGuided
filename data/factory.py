@@ -23,7 +23,8 @@ ANNOTATIONS_TEST = 'data/link2COCO2017/annotations_trainval_info/image_info_test
 IMAGE_DIR_TEST = 'data/link2COCO2017/test2017/'
 
 
-class DataPrefetcher():
+class DataPrefetcher(object):
+    # Copied from: https://github.com/NVIDIA/apex/blob/b5a7c5f972/examples/imagenet/main_amp.py
     def __init__(self, loader, opt=None):
         self.loader = iter(loader)
         self.stream = torch.cuda.Stream()
@@ -123,6 +124,9 @@ if __name__ == '__main__':  # for debug
     import timeit
     import argparse
     import encoder
+    import matplotlib.pyplot as plt
+    import cv2
+    import numpy as np
 
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -135,7 +139,9 @@ if __name__ == '__main__':  # for debug
     data_cli(parser)
     encoder.encoder_cli(parser)
     args = parser.parse_args()
-    args.headnets=['heatmaps', 'offsets']  # fixme: 训练中应该先运行net_cil然后再运行encoder_cli
+    args.headnets=['heatmaps', 'offsets']  # NOTICE : call net_cil before encoder_cli!!
+    args.include_background = True  # generate the heatmap of background
+    args.include_scale = True
 
     log_level = logging.WARNING  # logging.INFO
     # set RootLogger
@@ -151,20 +157,26 @@ if __name__ == '__main__':  # for debug
         for index in range(data_client.__len__()):
             batch += 1
 
-            image, anno, meta, mask_miss = [v for v in
+            image, annos, meta = [v for v in
                                             data_client.__getitem__(index)]
+            # mask_miss[0] from heatmap.py is actually the same as mask_miss[1] from offset.py
+            image = image.numpy()
+            mask_miss = annos[0][-1].numpy().astype(np.float32)  # bool -> float
+            bg_hmp = annos[0][1].numpy()
+            offset = annos[1][0].numpy()
 
             # # show the generated ground truth
-            # if show_image:
-            # show_labels = cv2.resize(meta.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
-            # # offsets = cv2.resize(offsets.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
-            # mask_miss = np.repeat(mask_miss.transpose((1, 2, 0)), 3, axis=2)
-            # mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
-            # image = cv2.resize(image, mask_miss.shape[:2], interpolation=cv2.INTER_NEAREST)
-            # plt.imshow(image[:, :, [2, 1, 0]])  # Opencv image format: BGR
-            # plt.imshow(meta.transpose((1, 2, 0))[:, :, 20], alpha=0.5)  # mask_all
-            # # plt.imshow(show_labels[:, :, 3], alpha=0.5)  # mask_all
-            # plt.show()
+            if show_image:
+                image = image.transpose((1, 2, 0))
+                show_labels = cv2.resize(bg_hmp.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
+                # offsets = cv2.resize(offsets.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
+                mask_miss = np.repeat(mask_miss.transpose((1, 2, 0)), 3, axis=2)
+                mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
+                # image = cv2.resize(image, mask_miss.shape[:2], interpolation=cv2.INTER_NEAREST)
+                plt.imshow(image)  # We manually set Opencv earlier: RGB
+                # plt.imshow(mask_miss, alpha=0.5)  # mask_all
+                plt.imshow(show_labels, alpha=0.5)  # mask_all
+                plt.show()
         print("produce %d samples per second: " % (batch / (time() - start)))  # about 70~80 FPS on MBP-13
 
 
@@ -188,13 +200,14 @@ if __name__ == '__main__':  # for debug
         transforms.RandomApply(transforms.JpegCompression(), 0.1),
         transforms.RandomApply(transforms.ColorTint(), 0.2),
         transforms.ImageTransform(torchvision.transforms.ToTensor()),
-        transforms.ImageTransform(
-            torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                             std=[0.229, 0.224, 0.225])),
+        # transforms.ImageTransform(
+        #     torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+        #                                      std=[0.229, 0.224, 0.225])),
 
     ]
     preprocess = transforms.Compose(preprocess_transformations)
 
+    args.strides = [4, 4]
     target_transform = encoder.encoder_factory(args, args.strides)
 
     val_client = CocoKeypoints(IMAGE_DIR_VAL, ANNOTATIONS_VAL,
@@ -203,7 +216,7 @@ if __name__ == '__main__':  # for debug
                                n_images=300, shuffle=True)
 
     # test the data generator
-    print(timeit.timeit(stmt='test_augmentation_speed(val_client, False)',
+    print(timeit.timeit(stmt='test_augmentation_speed(val_client, False)',  # True
                         setup="from __main__ import test_augmentation_speed;"
                               "from __main__ import val_client",
                         number=3))  # run for number times

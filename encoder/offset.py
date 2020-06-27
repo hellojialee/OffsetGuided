@@ -11,22 +11,25 @@ LOG = logging.getLogger(__name__)
 class OffsetMaps(object):
     """Offset map between adjacent keypoints and scale map of keypoints.
 
-    Attributes:
+    Args:
         input_size (int, list): the input image size of (w, h) or square length.
+
+    Attributes:
         include_scale (bool): generate keypoint scale maps or not.
     """
-    fill_scale_size = 8  # the area around keypoints will be filled with joint scale
+    fill_scale_size = 10  # the diameter of the area
+    # around keypoints will be filled with joint scale
     min_scale = 1  # minimum keypoint scale
     skeleton = COCO_PERSON_SKELETON  # human skeleton connections
+    include_scale = True
 
-    def __init__(self, input_size, stride, *, include_scale=True):
+    def __init__(self, input_size, stride):
         assert isinstance(input_size, (int, list)), input_size
         assert stride != 0, 'stride can not be zero'
         self.input_size = input_size if isinstance(input_size, list) \
             else [input_size] * 2
         self.in_out_scale = 1 / stride
         self.stride = stride
-        self.include_scale = include_scale
 
     def __call__(self, anns, meta, mask_miss):
         assert meta['width_height'][0] == self.input_size[0], 'raw data!'
@@ -44,7 +47,7 @@ class OffsetMaps(object):
                                fx=self.in_out_scale, fy=self.in_out_scale,
                                interpolation=cv2.INTER_CUBIC).astype(np.float32) / 255
         # mask_miss area marked by 0.
-        mask_miss = (mask_miss > 0.5).astype(np.float32)
+        mask_miss = (mask_miss > 0.5)  # use bool instead of .astype(np.float32)
         # import matplotlib.pyplot as plt
         # plt.imshow(np.repeat(mask_miss[:, :, np.newaxis], 3, axis=2))  # mask_all
         # plt.show()
@@ -52,18 +55,15 @@ class OffsetMaps(object):
         # Pytorch needs N*C*H*W format
         if self.include_scale:
             return (
-                (
-                    torch.from_numpy(offset_maps.transpose((2, 0, 1))),
-                    torch.from_numpy(scale_maps.transpose((2, 0, 1)))
-                ),
+                torch.from_numpy(offset_maps.transpose((2, 0, 1))),
+                torch.from_numpy(scale_maps.transpose((2, 0, 1))),
                 torch.from_numpy(mask_miss[None, ...])
             )
         else:
             return (
-                (
-                    torch.from_numpy(offset_maps.transpose((2, 0, 1))),
-                ),
-                torch.from_numpy(mask_miss[None, ...])
+                torch.from_numpy(offset_maps.transpose((2, 0, 1))),
+                torch.tensor([]),
+                torch.from_numpy(mask_miss[None, ...]),
             )
 
 

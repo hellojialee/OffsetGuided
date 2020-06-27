@@ -53,7 +53,6 @@ class Hourglass4Stage(nn.Module):
         bn: use batch normalization
         increase: increased channels once down-sampling
         pre (bool): use stacked residual blocks as the initial layers
-        init_weights:
     """
 
     def __init__(self, nstack, inp_dim, oup_dim, bn=False, increase=128, pre=True):

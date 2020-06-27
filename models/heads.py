@@ -11,34 +11,47 @@ class HeatMapsHead(torch.nn.Module):
     stride = 4  # the output stride of the base network
     n_keypoints = 17
     include_background = False  # background heatmap
+    bg_channel = 1
 
     def __init__(self, head_name, inp_dim, n_stacks,
                  kernel_size=1, padding=0, dilation=1):
         super(HeatMapsHead, self).__init__()
 
         LOG.debug('%s config: inp_dim = %d, n_stacks = %d, stride= %d, '
+                  'include background heatmap: %s, '
                   'n_keypoints = %d, kernel = %d, padding = %d, dilation = %d',
-                  head_name, inp_dim, n_stacks, self.stride,
+                  head_name, inp_dim, n_stacks, self.stride, self.include_background,
                   self.n_keypoints, kernel_size, padding, dilation)
 
         self.head_name = head_name
         self.n_stacks = n_stacks
         self.hp_convs = torch.nn.ModuleList([
-            torch.nn.Conv2d(inp_dim,
-                            self.n_keypoints + self.include_background * 1,
+            torch.nn.Conv2d(inp_dim, self.n_keypoints,
                             kernel_size, padding=padding, dilation=dilation)
             for _ in range(n_stacks)
         ])
+        self.bghp_convs = torch.nn.ModuleList([
+            torch.nn.Conv2d(inp_dim, self.bg_channel,
+                            kernel_size, padding=padding, dilation=dilation)
+            if self.include_background else torch.nn.Sequential()
+            for _ in range(n_stacks)])
 
     def forward(self, args):
         assert len(args) == self.n_stacks, 'multiple outputs from BaseNet'
         out_hmps = []
+        out_bghmp = []
 
-        for layer, x in zip(self.hp_convs, args):
-            hmp = layer(x)
+        for hmp_layer, bg_layer, x in zip(self.hp_convs, self.bghp_convs, args):
+            hmp = hmp_layer(x)
             out_hmps.append(hmp)
 
-        return out_hmps  # tuple
+            if self.include_background:
+                bg_hmp = bg_layer(x)
+                out_bghmp.append(bg_hmp)
+            else:
+                out_bghmp.append([])
+
+        return out_hmps, out_bghmp
 
 
 class OffsetMapsHead(torch.nn.Module):
@@ -46,14 +59,17 @@ class OffsetMapsHead(torch.nn.Module):
     n_keypoints = HeatMapsHead.n_keypoints
     n_skeleton = 19
     include_spread = False  # learning with uncertainty
+    include_scale = True
 
     def __init__(self, head_name, inp_dim, n_stacks,
                  kernel_size=1, padding=0, dilation=1):
         super(OffsetMapsHead, self).__init__()
 
         LOG.debug('%s config: inp_dim = %d, n_stacks = %d, stride = %d, '
+                  'include spread regression: %s, include scale regression: %s, '
                   'n_skeleton = %d, kernel = %d, padding = %d, dilation = %d',
                   head_name, inp_dim, n_stacks, self.stride,
+                  self.include_spread, self.include_scale,
                   self.n_skeleton, kernel_size, padding, dilation)
 
         self.head_name = head_name
@@ -75,8 +91,9 @@ class OffsetMapsHead(torch.nn.Module):
 
         # regression for keypoint scale
         self.scale_convs = torch.nn.ModuleList([
-            torch.nn.Conv2d(inp_dim, 2 * self.n_skeleton,
+            torch.nn.Conv2d(inp_dim, self.n_keypoints,
                             kernel_size, padding=padding, dilation=dilation)
+            if self.include_scale else torch.nn.Sequential()
             for _ in range(n_stacks)
         ])
 
@@ -88,34 +105,46 @@ class OffsetMapsHead(torch.nn.Module):
 
         for reg_layer, scale_layer, spread_layer, x in zip(
                 self.reg_convs, self.scale_convs, self.spread_convs, args):
+
             offset = reg_layer(x)
             out_offsets.append(offset)
 
-            scale = scale_layer(x)
-            out_scales.append(scale)
+            if self.include_spread:
+                spread = spread_layer(x)  # fixme: PIFAF use Leaky ReLu to do what?
+                out_spreads.append(spread)
+            else:
+                out_spreads.append([])
 
-            spread = spread_layer(x)
-            out_spreads.append(spread)
+            if self.include_scale:
+                scale = scale_layer(x)
+                out_scales.append(scale)
+            else:
+                out_scales.append([])
 
-        return out_offsets, out_scales, out_spreads
+        return out_offsets, out_spreads, out_scales
 
 
-def headnets_factory(headnames, n_stacks, stride, inp_dim):
+def headnets_factory(headnames, n_stacks, strides, inp_dim,
+                     include_spread, include_background, include_scale):
     """Build head networks.
 
     Args:
         headnames (list): a list of head names, e.g., "hmp17 omp19"
         n_stacks (int): base network may has multiple output tensors from all stacks.
-        stride: the output stride of the base network.
+        strides: the output strides of the base network.
         inp_dim: the tensor channels output by the base network.
+        include_spread: used in laplace loss
+        include_background: add the heatmap of background
     """
 
-    encoders = [factory_head(h, n_stacks, stride, inp_dim) for h in headnames]
+    encoders = [factory_head(h, n_stacks, s, inp_dim, include_spread, include_background, include_scale)
+                for h, s in zip(headnames, strides)]
 
     return encoders
 
 
-def factory_head(head_name, n_stacks, stride, inp_dim, include_spread=False):
+def factory_head(head_name, n_stacks, stride, inp_dim,
+                 include_spread=False, include_background=False, include_scale=True):
     """
     Build a head network.
 
@@ -140,6 +169,7 @@ def factory_head(head_name, n_stacks, stride, inp_dim, include_spread=False):
         LOG.info('select HeatMapsHead to infer %d keypoint', n_keypoints)
         HeatMapsHead.stride = stride
         HeatMapsHead.n_keypoints = n_keypoints
+        HeatMapsHead.include_background = include_background
         return HeatMapsHead(head_name, inp_dim, n_stacks)
 
     if head_name in ('omp',
@@ -166,6 +196,7 @@ def factory_head(head_name, n_stacks, stride, inp_dim, include_spread=False):
         OffsetMapsHead.stride = stride
         OffsetMapsHead.n_skeleton = n_skeleton
         OffsetMapsHead.include_spread = include_spread
+        OffsetMapsHead.include_scale = include_scale
         return OffsetMapsHead(head_name, inp_dim, n_stacks)
         # 构造并返回Paf，用于生成ground truth paf
     raise Exception('unknown head to create an encoder: {}'.format(head_name))
@@ -175,7 +206,7 @@ if __name__ == '__main__':
 
     headnames = ['hmp', 'omp']
 
-    head_nets = headnets_factory(headnames, 2, 4, 256)
+    head_nets = headnets_factory(headnames, 2, [4, 4], 256, True, True, True)
     t = id(head_nets[0].n_keypoints) == id(head_nets[1].n_keypoints)
     head_nets[1].n_keypoints = 20
     t2 = id(head_nets[0].n_keypoints) == id(head_nets[1].n_keypoints)
