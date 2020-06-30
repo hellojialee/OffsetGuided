@@ -11,7 +11,8 @@ def l1(x, t):
 
 
 def l2(x, t):
-    return ((x - t) ** 2).sum()
+    out = (x - t) ** 2 / 2
+    return out.sum()
 
 
 def laplace(norm, logb):
@@ -22,12 +23,12 @@ def laplace(norm, logb):
 def focal_l2(s, sxing, tau=0.01, gamma=1):
     st = torch.where(torch.ge(sxing, tau), s, 1. - s)
     factor = torch.abs(1. - st) ** gamma
-    out = (s - sxing) ** 2 * factor
+    out = (s - sxing) ** 2 * factor / 2
     return out.sum()
 
 
 def tensor_loss(pred, gt, mask_miss, fun):
-    """ Compute the distance of two tensors.
+    """ Compute the distance of two tensors with mask_miss and finite_mask.
     Args:
         pred: tensor shape (N, C, out_h, out_w)
         gt: tensor shape (N, C, out_h, out_w)
@@ -40,7 +41,10 @@ def tensor_loss(pred, gt, mask_miss, fun):
     labelled_pred = pred[mask_miss]
     labelled_gt = gt[mask_miss]
 
-    return fun(labelled_pred, labelled_gt)
+    # return true if tensor is not infinity or not Not a Number (nan etc,)
+    mask = torch.isfinite(labelled_gt)
+
+    return fun(labelled_pred[mask], labelled_gt[mask])
 
 
 class LossChoice(object):
@@ -53,7 +57,7 @@ class LossChoice(object):
         return tensor_loss(pred, gt, mask_miss, focal_l2)
 
     @staticmethod
-    def scale_l1_loss(pred, gt, mask_miss, fun=l1):
+    def scale_l1_loss(pred, gt, mask_miss):
         """
         Args:
             pred: inferred tensor of shape (N, C, out_h, out_w)
@@ -61,23 +65,11 @@ class LossChoice(object):
             mask_miss: tensor of shape (N, 1, out_h, out_w) unlabelled areas denoted as 0,
             fun: function to compute the loss.
         """
-        mask_miss = mask_miss.expand_as(gt)
-
-        labelled_pred = pred[mask_miss]
-        labelled_gt = gt[mask_miss]
-
-        mask = torch.isnan(labelled_gt) == 0
-        return fun(labelled_pred[mask], labelled_gt[mask])
+        return tensor_loss(pred, gt, mask_miss, l1)
 
     @staticmethod
-    def offset_l1_loss(pred, gt, _, mask_miss, fun=l1):
-        mask_miss = mask_miss.expand_as(gt)
-
-        labelled_pred = pred[mask_miss]
-        labelled_gt = gt[mask_miss]
-
-        mask = torch.isinf(labelled_gt) == 0
-        return fun(labelled_pred[mask], labelled_gt[mask])
+    def offset_l1_loss(pred, gt, _, mask_miss):
+        return tensor_loss(pred, gt, mask_miss, l1)
 
     @staticmethod
     def offset_laplace_loss(pred, gt, logb, mask_miss):
@@ -103,7 +95,7 @@ class LossChoice(object):
         labelled_offset_x = offset_x.squeeze(
         )[mask_miss.expand_as(offset_x.squeeze())]
 
-        mask = torch.isinf(labelled_offset_x) == 0
+        mask = torch.isfinite(labelled_offset_x)
         return laplace(labelled_norm[mask], labelled_logb[mask])
 
 
@@ -127,9 +119,13 @@ class HeatMapsLoss(object):
             pred_hpms: inferred outputs like [hmp_stack1, hmp_stack2], [bg_hmp_stack1, bg_hmp_stack2]
             gt_hpm:
             mask_miss:
+        Returns:
+             keypoints hmp loss, background hmp loss
         """
 
         assert len(pred_hpms[0]) == self.n_stacks, 'BaseNet mismatches HeadNet'
+        batch_size = gt_hpm.shape[0]
+        LOG.debug('batch size = %d', batch_size)
         hmps, bg_hmps = pred_hpms
         out1, out2 = [], []
 
@@ -142,8 +138,8 @@ class HeatMapsLoss(object):
                 weighted_bgloss = self.hmp_loss(bg_hmp, gt_bghmp, mask_miss) \
                                   * self.stack_weights[stack_i]
                 out2.append(weighted_bgloss)
-
-        return sum(out1), sum(out2)
+        LOG.debug('hmp loss: %s, \t background hmp loss: %s', out1, out2)
+        return sum(out1) / batch_size, sum(out2) / batch_size
 
 
 class OffsetMapsLoss(object):
@@ -167,6 +163,8 @@ class OffsetMapsLoss(object):
         Returns: offset loss (of vectors of x, y), keypoint scale loss
         """
         assert len(preds[0]) == self.n_stacks
+        batch_size = gt_off.shape[0]
+        LOG.debug('batch size = %d', batch_size)
         out1, out2 = [], []
         pred_off_stacks, pred_spread_stacks, pred_scale_stacks = preds
 
@@ -178,8 +176,8 @@ class OffsetMapsLoss(object):
             if len(pred_s) > 0:
                 out2.append(self.s_loss(pred_s, gt_s, mask_miss)
                             * self.stack_weights[stack_i])
-
-        return sum(out1), sum(out2)
+        LOG.debug('connection offset loss: %s, \t keypoint scale loss: %s', out1, out2)
+        return sum(out1) / batch_size, sum(out2) / batch_size
 
 
 def lossfuncs_factory(headnames, n_stacks, stack_weights, heatmap_loss, offset_loss, scale_loss):

@@ -86,8 +86,8 @@ class OffsetMapGenerator(object):
         self.out_w = self.in_w // stride
         self.out_h = self.in_h // stride
 
-        LOG.info('Input image size: %d*%d, network output size: %d*%d',
-                 self.in_w, self.in_h, self.out_w, self.out_h)
+        LOG.debug('Input image size: %d*%d, network output size: %d*%d',
+                  self.in_w, self.in_h, self.out_w, self.out_h)
 
         # mapping coordinates into original input with cell center alignment.
         self.grid_x = np.arange(self.out_w) * stride + stride / 2 - 0.5  # x -> width

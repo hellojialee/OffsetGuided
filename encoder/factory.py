@@ -91,7 +91,7 @@ def factory_head(head_name, square_length, stride):
             re.match('omp[s]?([0-9]+)$', head_name) is not None:
         if head_name in ('omp', 'omp19', 'omps', 'offset', 'offsets'):
             n_keypoints = 17
-            OffsetMaps.skeleton = COCO_PERSON_SKELETON  # 默认使用这个人体骨架
+            OffsetMaps.skeleton = COCO_PERSON_SKELETON  # default selection
         elif head_name in ('omp16',):
             n_keypoints = 17
             OffsetMaps.skeleton = KINEMATIC_TREE_SKELETON

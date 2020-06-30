@@ -8,8 +8,10 @@ LOG = logging.getLogger(__name__)
 
 def net_cli(parser):
     group = parser.add_argument_group('model configuration')
-    group.add_argument('--checkpoint', default=None,
-                       help='Path to the pre-trained model and optimizer.')
+    group.add_argument('--initialize-whole', default=True, type=bool,
+                       help='randomly initialize the basenet and headnets')
+    group.add_argument('--checkpoint-whole', default=None, type=str,
+                       help='the checkpoint pach to the whole model (basenet+headnets)')
 
     group = parser.add_argument_group('base network configuration')
     group.add_argument('--basenet', default='hourglass104',
@@ -20,8 +22,9 @@ def net_cli(parser):
                        help='to be implemented')
     group.add_argument('--no-pretrain', dest='pretrained', default=True,
                        action='store_false',
-                       help='create basenet without pretraining')
-
+                       help='create BaseNet without pretraining')
+    group.add_argument('--basenet-checkpoint', default="../weights/hourglass_104_renamed.pth",
+                       type=str, help='Path to the pre-trained model and optimizer.')
     group = parser.add_argument_group('head network configuration')
     group.add_argument('--headnets', default=['hmp', 'omp'], nargs='+',
                        help='head networks')
@@ -39,16 +42,16 @@ def net_cli(parser):
                             'in separate channels')
 
     group = parser.add_argument_group('loss configuration')
-    group.add_argument('--lambdas', default=[1, 1, 1, 1],
+    group.add_argument('--lambdas', default=[1, 1, 0.001, 1],
                        type=float, nargs='+',
-                       help='learning task wights')
+                       help='learning task wights, directly multiply, not averaged')
     group.add_argument('--stack-weights', default=[1, 1],
                        type=float, nargs='+',
-                       help='loss weights of different stacks')
+                       help='loss weights of different stacks, weighted-sum averaged')
     group.add_argument('--hmp-loss', default='focal_l2_loss',
                        choices=['l2_loss', 'focal_l2_loss'],
                        help='loss for heatmap regression')
-    group.add_argument('--offset-loss', default='offset_laplace_loss',
+    group.add_argument('--offset-loss', default='offset_l1_loss',
                        choices=['offset_l1_loss', 'offset_laplace_loss'],
                        help='loss for offeset regression')
     group.add_argument('--scale-loss', default='scale_l1_loss',
@@ -62,7 +65,7 @@ def model_factory(args):
     if 'hourglass' in args.basenet:
         # build the base network
         basenet, n_stacks, stride, feature_dim = hourglass_from_scratch(
-            args.basenet, args.pretrained)
+            args.basenet, args.pretrained, args.basenet_checkpoint, args.initialize_whole)
 
         # build the head networks
         assert stride == args.strides[0], 'strides mismatch'
@@ -75,11 +78,17 @@ def model_factory(args):
             args.include_background,
             args.include_scale)
         # no pre-trained headnets, so we randomly initialize them
-        headnets = [networks.initialize_weights(h) for h in headnets]
+        if args.initialize_whole:
+            headnets = [networks.initialize_weights(h) for h in headnets]
 
         lossfuncs = losses.lossfuncs_factory(
-            args.headnets, n_stacks, args.stack_weights,
-            args.hmp_loss, args.offset_loss, args.scale_loss)
+            args.headnets,
+            n_stacks,
+            args.stack_weights,
+            args.hmp_loss,
+            args.offset_loss,
+            args.scale_loss)
+
         model = networks.NetworkWrap(basenet, headnets)
 
         return model, lossfuncs
@@ -89,15 +98,16 @@ def model_factory(args):
     raise Exception(f'unknown base network: {args.base_name}')
 
 
-def hourglass_from_scratch(base_name, pretrained):
+def hourglass_from_scratch(base_name, pretrained, basenet_checkpoint, initialize_whole):
     basenet, n_stacks, stride, feature_dim = networks.basenet_factory(
         base_name)
-    # initialize model params in-place
-    basenet = networks.initialize_weights(basenet)
+    # initialize model params in-place, for not all params are old ones from pre-trained model
+    if initialize_whole:
+        basenet = networks.initialize_weights(basenet)
 
     if pretrained:
-        basenet, _, _ = networks.load_model(
-            basenet, '../weights/hourglass_104_renamed.pth')
+        basenet, _, _, _ = networks.load_model(
+            basenet, basenet_checkpoint)
 
     return basenet, n_stacks, stride, feature_dim
 
@@ -111,7 +121,7 @@ def debug_parse_args():
                         help='this parse is only for debug the code')
 
     net_cli(parser)
-    args = parser.parse_args('--for-debug  --include-spread --include-background --include-scale'.split())
+    args = parser.parse_args('--for-debug '.split())
     return args
 
 
@@ -123,6 +133,17 @@ if __name__ == '__main__':
     logging.basicConfig(level=log_level)
 
     args = debug_parse_args()
+    t = LOG.parent
+
+    import sys
+
+    LOG.info({
+        'type': 'process',
+        'argv': sys.argv,  # 返回一个list，包含运行程序本身的名字，以及用户输入的命令行中给予的参数
+        'args': vars(args),  # args命名空间的值
+    })
+    t = sys.argv
+    cmd = ' '.join(t)
     model, lossfuns = model_factory(args)
     model.cuda()
     model.eval()  # 只有被正确注册的参数和子网络才会被自动移动到cuda上
@@ -150,4 +171,3 @@ if __name__ == '__main__':
     loss = sum(loss1) + sum(loss2)
     loss.backward()
     print('done')
-

@@ -23,16 +23,19 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
     """
 
     start_epoch = 0
+    start_loss = float('inf')
     if not os.path.isfile(ckpt_path):
         print(f'WARRRING!!! \t Current checkpoint file {ckpt_path} DOSE NOT exist!!')
         print("############# No pre-trained parameters are loaded! #############\n"
               "######## Please make sure you initialize the model randomly! #####")
         # return without loading
-        return model, None, start_epoch
+        return model, None, start_epoch, start_loss
 
     checkpoint = torch.load(ckpt_path, map_location=torch.device('cpu'))
     LOG.info('Loading pre-trained model %s, checkpoint at epoch %d', ckpt_path,
              checkpoint['epoch'])
+    start_epoch = checkpoint['epoch'] + 1
+    start_loss = checkpoint['train_loss']
     state_dict_ = checkpoint['model_state_dict']  # type: dict
 
     from collections import OrderedDict
@@ -71,7 +74,7 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
             LOG.debug('No param in pre-trained model %s. %s', k, msg)
             state_dict[k] = model_state_dict[k]  # append missing params
     model.load_state_dict(state_dict, strict=False)
-    print('Network weights have been resumed from checkpoint.')
+    print(f'Network {model.__class__.__name__} weights have been resumed from checkpoint: {ckpt_path}')
 
     # resume optimizer parameters
     if optimizer is not None and resume_optimizer:
@@ -88,17 +91,16 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
                         if torch.is_tensor(v):
                             state[k] = v.cuda()
 
-            start_epoch = checkpoint['epoch'] + 1
             # param_group['lr'] will be instead set in a separate fun: adjust_learning_rate()
-            print('Optimizer has been resumed from the checkpoint at epoch {}.'
-                  .format(start_epoch - 1))
+            print('Optimizer {} has been resumed from the checkpoint at epoch {}.'
+                  .format(optimizer.__class__.__name__, start_epoch - 1))
         else:
-            print('No pre-trained optimizer weights in current checkpoint.')
+            print('Optimizer {} has NO pre-trained weights in current checkpoint.'.format(optimizer.__class__.__name__))
 
     if optimizer is not None and resume_optimizer:
-        return model, optimizer, start_epoch
+        return model, optimizer, start_epoch, start_loss
     else:
-        return model, None, start_epoch,
+        return model, None, start_epoch, start_loss
 
 
 def save_model(path, epoch, train_loss, model, optimizer=None):
@@ -107,13 +109,16 @@ def save_model(path, epoch, train_loss, model, optimizer=None):
         state_dict = model.module.state_dict()  # remove prefix 'module.'
     else:
         state_dict = model.state_dict()
+    print(f'Saving {model.__class__.__name__} state dict...')
 
     data = {'epoch': epoch,
             'train_loss': train_loss,
             'model_state_dict': state_dict}
     if not (optimizer is None):
+        print(f'Saving {optimizer.__class__.__name__} state dict...')
         data['optimizer_state_dict'] = optimizer.state_dict()
     torch.save(data, path)
+    print(f'Checkpoint has been saved at {path}')
 
 
 def initialize_weights(model):
@@ -125,6 +130,8 @@ def initialize_weights(model):
     Returns: initialized model
 
     """
+    # trick: obtain the class name of this current instance
+    print(f"Initialize the weights of {model.__class__.__name__}.")
     for m in model.modules():
         if isinstance(m, nn.Conv2d):
             m.weight.data.normal_(0, 0.001)
@@ -156,7 +163,7 @@ class NetworkWrap(torch.nn.Module):
         # will call this forward on every GPU
         feature_tuple = self.basenet(img_tensor)
         head_outputs = [hn(feature_tuple) for hn in self.headnets]
-
+        LOG.debug('final output length of the model: %s ', len(head_outputs))
         return head_outputs
 
 

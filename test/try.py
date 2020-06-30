@@ -1,3 +1,0 @@
-import models
-
-print('ok')

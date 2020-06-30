@@ -1,13 +1,11 @@
 """Dataloader and
 Configurations for data preparations and transformations"""
 
-import copy
 import logging
-import os
 import torch.utils.data
 import torchvision
 
-from data import transforms
+import transforms
 from data import CocoKeypoints
 
 
@@ -56,15 +54,17 @@ def data_cli(parser):
     group.add_argument('--val-annotations', default=ANNOTATIONS_VAL)
     group.add_argument('--val-image-dir', default=IMAGE_DIR_VAL)
     group.add_argument('--n-images-train', default=None, type=int,
-                       help='number of images to sample from the train subset')
+                       help='number of images to sample from the trains subset')
     group.add_argument('--n-images-val', default=None, type=int,
                        help='number of images to sample from the val subset')
     group.add_argument('--loader-workers', default=8, type=int,
                        help='number of workers for data loading')
     group.add_argument('--batch-size', default=8, type=int,
                        help='batch size')
-    group.add_argument('--force-shuffle', default=False, action='store_true',
-                       help='force the dataset shuffle by hand')
+    group.add_argument('--train-shuffle', default=False, action='store_true',
+                       help='force the trains dataset shuffle by hand')
+    group.add_argument('--val-shuffle', default=False, action='store_true',
+                       help='force the validate dataset shuffle by hand')
 
     group = parser.add_argument_group('training parameters for warp affine')
     group.add_argument('--square-length', default=512, type=int,
@@ -82,34 +82,17 @@ def data_cli(parser):
                        help='show the transformed image and keyooints')
 
 
-def data_factory(args, preprocess, target_transforms):
+def dataloader_factory(args, preprocess, target_transforms):
     if args.loader_workers is None:
         args.loader_workers = 0
-
-    train_data = CocoKeypoints(
-        img_dir=args.train_image_dir,
-        annFile=args.train_annotations,
-        preprocess=preprocess,
-        target_transforms=target_transforms,
-        n_images=args.n_images_train,
-        shuffle=args.force_shuffle
-    )
+    train_data, val_data = dataset_factory(args, preprocess, target_transforms)
 
     train_loader = torch.utils.data.DataLoader(
         train_data, batch_size=args.batch_size,
-        shuffle=not args.debug,
+        shuffle=False,  # we control shuffle by args.train_shuffle
         pin_memory=args.pin_memory,
         num_workers=args.loader_workers,
         drop_last=True,)
-
-    val_data = CocoKeypoints(
-        img_dir=args.val_image_dir,
-        annFile=args.val_annotations,
-        preprocess=preprocess,
-        target_transforms=target_transforms,
-        n_images=args.n_images_val,
-        shuffle=args.force_shuffle
-    )
 
     val_loader = torch.utils.data.DataLoader(
         val_data, batch_size=args.batch_size, shuffle=False,
@@ -119,9 +102,31 @@ def data_factory(args, preprocess, target_transforms):
     return train_loader, val_loader
 
 
+def dataset_factory(args, preprocess, target_transforms):
+
+    train_data = CocoKeypoints(
+        img_dir=args.train_image_dir,
+        annFile=args.train_annotations,
+        preprocess=preprocess,
+        target_transforms=target_transforms,
+        n_images=args.n_images_train,
+        shuffle=args.train_shuffle  # shuffle the data
+    )
+
+    val_data = CocoKeypoints(
+        img_dir=args.val_image_dir,
+        annFile=args.val_annotations,
+        preprocess=preprocess,
+        target_transforms=target_transforms,
+        n_images=args.n_images_val,
+        shuffle=args.val_shuffle
+    )
+
+    return train_data, val_data
+
+
 if __name__ == '__main__':  # for debug
     from time import time
-    import timeit
     import argparse
     import encoder
     import matplotlib.pyplot as plt
@@ -139,7 +144,7 @@ if __name__ == '__main__':  # for debug
     data_cli(parser)
     encoder.encoder_cli(parser)
     args = parser.parse_args()
-    args.headnets=['heatmaps', 'offsets']  # NOTICE : call net_cil before encoder_cli!!
+    args.headnets=['heatmaps', 'offsets']  # NOTICE : call net_cli before encoder_cli!!
     args.include_background = True  # generate the heatmap of background
     args.include_scale = True
 
@@ -193,30 +198,56 @@ if __name__ == '__main__':  # for debug
     preprocess_transformations = [
         transforms.NormalizeAnnotations(),
         transforms.WarpAffineTransforms(args.square_length, aug_params=args, debug_show=False),
-        transforms.RandomApply(transforms.AnnotationJitter(), 0.1),
+        # transforms.RandomApply(transforms.AnnotationJitter(), 0.1),
     ]
 
     preprocess_transformations += [
-        transforms.RandomApply(transforms.JpegCompression(), 0.1),
+        # transforms.RandomApply(transforms.JpegCompression(), 0.1),
         transforms.RandomApply(transforms.ColorTint(), 0.2),
         transforms.ImageTransform(torchvision.transforms.ToTensor()),
-        # transforms.ImageTransform(
-        #     torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
-        #                                      std=[0.229, 0.224, 0.225])),
+        transforms.ImageTransform(
+            torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                             std=[0.229, 0.224, 0.225])),
 
     ]
     preprocess = transforms.Compose(preprocess_transformations)
 
     args.strides = [4, 4]
+
+    args.pin_memory = False
+    if torch.cuda.is_available():
+        args.pin_memory = True
+
     target_transform = encoder.encoder_factory(args, args.strides)
 
     val_client = CocoKeypoints(IMAGE_DIR_VAL, ANNOTATIONS_VAL,
                                preprocess=preprocess,
                                target_transforms=target_transform,
-                               n_images=300, shuffle=True)
+                               n_images=1000, shuffle=True)
 
     # test the data generator
-    print(timeit.timeit(stmt='test_augmentation_speed(val_client, False)',  # True
-                        setup="from __main__ import test_augmentation_speed;"
-                              "from __main__ import val_client",
-                        number=3))  # run for number times
+    # print(timeit.timeit(stmt='test_augmentation_speed(val_client, False)',  # True
+    #                     setup="from __main__ import test_augmentation_speed;"
+    #                           "from __main__ import val_client",
+    #                     number=3))  # run for number times  # generate 17 samples per second
+
+    test_val_loader = torch.utils.data.DataLoader(
+        val_client, batch_size=args.batch_size, shuffle=False,
+        pin_memory=args.pin_memory,
+        num_workers=args.loader_workers, drop_last=True)
+
+    t0 = time()
+    count = 0
+    print(torch.cuda.get_device_name(0))
+    torch.backends.cudnn.benchmark = True
+    for epoch in range(20):
+        for bath_id, (images, annos, metas) in enumerate(test_val_loader):
+            annos = [[x.cuda() for x in pack] for pack in annos]
+            img = images[0]  # .cuda(non_blocking=True)  # , non_blocking=True
+            count += len(img)
+            print(bath_id, ' of ', epoch)
+            if count > 200:
+                break
+    print('**************** ', count / (time() - t0))
+
+
