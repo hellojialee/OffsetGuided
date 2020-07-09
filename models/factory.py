@@ -23,7 +23,7 @@ def net_cli(parser):
     group.add_argument('--no-pretrain', dest='pretrained', default=True,
                        action='store_false',
                        help='create BaseNet without pretraining')
-    group.add_argument('--basenet-checkpoint', default="../weights/hourglass_104_renamed.pth",
+    group.add_argument('--basenet-checkpoint', default="weights/hourglass_104_renamed.pth",
                        type=str, help='Path to the pre-trained model and optimizer.')
     group = parser.add_argument_group('head network configuration')
     group.add_argument('--headnets', default=['hmp', 'omp'], nargs='+',
@@ -42,7 +42,7 @@ def net_cli(parser):
                             'in separate channels')
 
     group = parser.add_argument_group('loss configuration')
-    group.add_argument('--lambdas', default=[1, 1, 0.001, 1],
+    group.add_argument('--lambdas', default=[1, 1, 1, 1],  # 0.001
                        type=float, nargs='+',
                        help='learning task wights, directly multiply, not averaged')
     group.add_argument('--stack-weights', default=[1, 1],
@@ -54,13 +54,24 @@ def net_cli(parser):
     group.add_argument('--offset-loss', default='offset_l1_loss',
                        choices=['offset_l1_loss', 'offset_laplace_loss'],
                        help='loss for offeset regression')
+    group.add_argument('--sqrt-re', default=False, action='store_true',
+                       help='rescale the offset loss using torch.sqrt')
     group.add_argument('--scale-loss', default='scale_l1_loss',
                        choices=['scale_l1_loss'],
                        help='loss for keypoint scale regression')
+    group.add_argument('--ftao', default=losses.TAU, type=float,
+                       help='threshold between fore/background in focal L2 loss during training')
+    group.add_argument('--fgamma', default=losses.GAMMA, type=float,
+                       help='order of scaling factor in focal L2 loss during training')
+    group.add_argument('--lmargin', default=losses.MARGIN, type=float,
+                       help='offset length below this value will not be punished during training')
 
 
 def model_factory(args):
     """Build the whole model from scratch from the args"""
+    losses.TAU = args.ftao
+    losses.GAMMA = args.fgamma
+    losses.MARGIN = args.lmargin
 
     if 'hourglass' in args.basenet:
         # build the base network
@@ -87,7 +98,8 @@ def model_factory(args):
             args.stack_weights,
             args.hmp_loss,
             args.offset_loss,
-            args.scale_loss)
+            args.scale_loss,
+            args.sqrt_re)
 
         model = networks.NetworkWrap(basenet, headnets)
 
@@ -133,7 +145,6 @@ if __name__ == '__main__':
     logging.basicConfig(level=log_level)
 
     args = debug_parse_args()
-    t = LOG.parent
 
     import sys
 

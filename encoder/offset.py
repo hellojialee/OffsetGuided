@@ -126,6 +126,14 @@ class OffsetMapGenerator(object):
         Generate ground truth on a single channel.
         """
 
+        # https://nedbatchelder.com/text/names.html
+        # Values fall into two categories based on their type: mutable or immutable.
+        # Immutable values include numbers, strings, and tuples. Almost everything
+        # else is mutable, including lists, dicts, and user-defined objects. Mutable
+        # means that the value has methods that can change the value in-place.
+        # Immutable means that the value can never change, instead when you think you
+        # are changing the value, you are REALLY making new values from old ones.
+        # In our case, we refer feature_maps[0] and feature_maps[1] as they are user-defined objects.
         offset_maps = feature_maps[0]
         scale_maps = feature_maps[1]
 

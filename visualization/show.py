@@ -16,6 +16,7 @@ except ImportError:
     plt = None
 
 
+# 上下文管理也可以通过编写__enter__和__exit__实现，但仍然很繁琐，因此Python的标准库contextlib提供了更简单的写法
 @contextmanager
 def canvas(fig_file=None, show=True, dpi=200, **kwargs):
     if 'figsize' not in kwargs:

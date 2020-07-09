@@ -1,0 +1,184 @@
+python3 train_distributed.py --help
+usage: train_distributed.py [-h] [--logging-output LOGGING_OUTPUT]
+                            [--logging-stdout] [--logging-write LOGGING_WRITE]
+                            [--debug] [-q]
+                            [--train-annotations TRAIN_ANNOTATIONS]
+                            [--train-image-dir TRAIN_IMAGE_DIR]
+                            [--val-annotations VAL_ANNOTATIONS]
+                            [--val-image-dir VAL_IMAGE_DIR]
+                            [--n-images-train N_IMAGES_TRAIN]
+                            [--n-images-val N_IMAGES_VAL]
+                            [--loader-workers LOADER_WORKERS]
+                            [--batch-size BATCH_SIZE] [--train-shuffle]
+                            [--val-shuffle] [--square-length SQUARE_LENGTH]
+                            [--flip-prob FLIP_PROB] [--max-rotate MAX_ROTATE]
+                            [--min-scale MIN_SCALE] [--max-scale MAX_SCALE]
+                            [--max-translate MAX_TRANSLATE]
+                            [--debug-affine-show]
+                            [--initialize-whole INITIALIZE_WHOLE]
+                            [--checkpoint-whole CHECKPOINT_WHOLE]
+                            [--basenet BASENET] [--two-scale] [--multi-scale]
+                            [--no-pretrain]
+                            [--basenet-checkpoint BASENET_CHECKPOINT]
+                            [--headnets HEADNETS [HEADNETS ...]]
+                            [--strides STRIDES [STRIDES ...]]
+                            [--include-spread] [--include-background]
+                            [--include-scale]
+                            [--lambdas LAMBDAS [LAMBDAS ...]]
+                            [--stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]]
+                            [--hmp-loss {l2_loss,focal_l2_loss}]
+                            [--offset-loss {offset_l1_loss,offset_laplace_loss}]
+                            [--scale-loss {scale_l1_loss}]
+                            [--gaussian-clip-thre GAUSSIAN_CLIP_THRE]
+                            [--sigma SIGMA]
+                            [--fill-scale-size FILL_SCALE_SIZE]
+                            [--min_scale MIN_SCALE] [--resume] [--freeze]
+                            [--epochs N] [--warmup]
+                            [--checkpoint-path CHECKPOINT_PATH]
+                            [--max-grad_norm MAX_GRAD_NORM]
+                            [--local_rank LOCAL_RANK] [--opt-level OPT_LEVEL]
+                            [--no-sync-bn]
+                            [--keep-batchnorm-fp32 KEEP_BATCHNORM_FP32]
+                            [--loss-scale LOSS_SCALE]
+                            [--channels-last CHANNELS_LAST] [--print-freq N]
+                            [--optimizer {sgd,adam}] [--learning-rate LR]
+                            [--momentum M] [--weight-decay W]
+
+Distributed training with Nvidia Apex
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --resume, -r          resume from checkpoint (default: False)
+  --freeze              freeze the pre-trained layers of the BaseNet, i.e.
+                        Backbone (default: False)
+  --epochs N            number of epochs to train (default: 100)
+  --warmup              using warm-up learning rate (default: False)
+  --checkpoint-path CHECKPOINT_PATH, -p CHECKPOINT_PATH
+                        folder path checkpoint storage of the whole pose
+                        estimation model (default: link2checkpoints_storage)
+  --max-grad_norm MAX_GRAD_NORM
+                        If the norm of the gradient vector exceeds this, re-
+                        normalize it to have the norm equal to max_grad_norm
+                        (default: 10)
+
+logging:
+  --logging-output LOGGING_OUTPUT
+  --logging-stdout      print the detailed log at stdout stream (default:
+                        False)
+  --logging-write LOGGING_WRITE
+                        write the detailed log into log file (default: True)
+  --debug               print debug messages (default: False)
+  -q, --quiet           only show warning messages or above (default: False)
+
+dataset and loader:
+  --train-annotations TRAIN_ANNOTATIONS
+  --train-image-dir TRAIN_IMAGE_DIR
+  --val-annotations VAL_ANNOTATIONS
+  --val-image-dir VAL_IMAGE_DIR
+  --n-images-train N_IMAGES_TRAIN
+                        number of images to sample from the trains subset
+                        (default: None)
+  --n-images-val N_IMAGES_VAL
+                        number of images to sample from the val subset
+                        (default: None)
+  --loader-workers LOADER_WORKERS
+                        number of workers for data loading (default: 8)
+  --batch-size BATCH_SIZE
+                        batch size (default: 8)
+  --train-shuffle       force the trains dataset shuffle by hand (default:
+                        False)
+  --val-shuffle         force the validate dataset shuffle by hand (default:
+                        False)
+
+training parameters for warp affine:
+  --square-length SQUARE_LENGTH
+                        square edge of input images (default: 512)
+  --flip-prob FLIP_PROB
+                        the probability to flip the input image (default: 0.5)
+  --max-rotate MAX_ROTATE
+  --min-scale MIN_SCALE
+                        lower bound of the relative image scale during
+                        augmentation (default: 0.7)
+  --max-scale MAX_SCALE
+  --max-translate MAX_TRANSLATE
+                        upper bound of shitting the image during augmentation
+                        (default: 50)
+  --debug-affine-show   show the transformed image and keyooints (default:
+                        False)
+
+model configuration:
+  --initialize-whole INITIALIZE_WHOLE
+                        randomly initialize the basenet and headnets (default:
+                        True)
+  --checkpoint-whole CHECKPOINT_WHOLE
+                        the checkpoint pach to the whole model
+                        (basenet+headnets) (default: None)
+
+base network configuration:
+  --basenet BASENET     base network, e.g. hourglass4stage (default:
+                        hourglass104)
+  --two-scale           to be implemented (default: False)
+  --multi-scale         to be implemented (default: False)
+  --no-pretrain         create BaseNet without pretraining (default: True)
+  --basenet-checkpoint BASENET_CHECKPOINT
+                        Path to the pre-trained model and optimizer. (default:
+                        ../weights/hourglass_104_renamed.pth)
+
+head network configuration:
+  --headnets HEADNETS [HEADNETS ...]
+                        head networks (default: ['hmp', 'omp'])
+  --strides STRIDES [STRIDES ...]
+                        rations of the input to the output of basenet, also
+                        the strides of all sub headnets (default: [4, 4])
+  --include-spread      add conv layers to regress the spread_b of Laplace
+                        distribution, you should set it to True if you chose
+                        laplace loss (default: False)
+  --include-background  include the heatmap of background channel (default:
+                        False)
+  --include-scale       add cone layers to regress the keypoint scales in
+                        separate channels (default: False)
+
+loss configuration:
+  --lambdas LAMBDAS [LAMBDAS ...]
+                        learning task wights, directly multiply, not averaged
+                        (default: [1, 1, 0.001, 1])
+  --stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]
+                        loss weights of different stacks, weighted-sum
+                        averaged (default: [1, 1])
+  --hmp-loss {l2_loss,focal_l2_loss}
+                        loss for heatmap regression (default: focal_l2_loss)
+  --offset-loss {offset_l1_loss,offset_laplace_loss}
+                        loss for offeset regression (default: offset_l1_loss)
+  --scale-loss {scale_l1_loss}
+                        loss for keypoint scale regression (default:
+                        scale_l1_loss)
+
+heatmap encoder:
+  --gaussian-clip-thre GAUSSIAN_CLIP_THRE
+                        Gaussian distribution below this value is cut to zero
+                        (default: 0.01)
+  --sigma SIGMA         standard deviation of Gaussian distribution (default:
+                        9)
+
+offsetmap and scalemap encoder:
+  --fill-scale-size FILL_SCALE_SIZE
+                        the area around the keypoint will be filled with joint
+                        scale values. (default: 10)
+  --min_scale MIN_SCALE
+                        set minimum keypoint scale (default: 1)
+
+apex configuration:
+  --local_rank LOCAL_RANK
+  --opt-level OPT_LEVEL
+  --no-sync-bn          enabling apex sync BN. (default: True)
+  --keep-batchnorm-fp32 KEEP_BATCHNORM_FP32
+  --loss-scale LOSS_SCALE
+  --channels-last CHANNELS_LAST
+  --print-freq N, -f N  print frequency (default: 10) (default: 10)
+
+optimizer configuration:
+  --optimizer {sgd,adam}
+  --learning-rate LR    learning rate (default: 2.5e-05)
+  --momentum M          momentum (default: 0.9)
+  --weight-decay W, --wd W
+                        weight decay (default: 1e-4) (default: 0.0001)

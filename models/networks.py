@@ -1,6 +1,7 @@
 import logging
 
 import os
+import sys
 import torch
 import torch.nn as nn
 from models import Hourglass104, Hourglass4Stage
@@ -29,7 +30,7 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
         print("############# No pre-trained parameters are loaded! #############\n"
               "######## Please make sure you initialize the model randomly! #####")
         # return without loading
-        return model, None, start_epoch, start_loss
+        return model, optimizer, start_epoch, start_loss
 
     checkpoint = torch.load(ckpt_path, map_location=torch.device('cpu'))
     LOG.info('Loading pre-trained model %s, checkpoint at epoch %d', ckpt_path,
@@ -55,30 +56,34 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
     model_state_dict = model.state_dict()  # newly built model
 
     # check loaded parameters and created model parameters
-    msg = 'If you see this, your model does not fully load the ' + \
-          'pre-trained weight. Please make sure ' + \
-          'you have correctly specified the output or regression layers.'
+    msg1 = 'If you see this, your model does not fully load the ' + \
+           'pre-trained weight. Please make sure ' + \
+           'you have correctly built the model layers or the weight shapes.'
+    msg2 = 'If you see this, your model has more parameters than the ' + \
+           'pre-trained weight. Please make sure ' + \
+           'you have correctly specified more layers.'
     for k in state_dict:
         if k in model_state_dict:
             if state_dict[k].shape != model_state_dict[k].shape:
                 LOG.debug(
                     'Skip loading pre-trained parameter %s, current model '
                     'required shape %s, loaded shape %s. %s',
-                    k, model_state_dict[k].shape, state_dict[k].shape, msg)
-                state_dict[k] = model_state_dict[k]  # fix bad params
+                    k, model_state_dict[k].shape, state_dict[k].shape, msg1)
+                state_dict[k] = model_state_dict[k]  # fix badly mismatched params
         else:
             LOG.debug('Drop pre-trained parameter %s which current model dose '
-                      'not have. %s', k, msg)
+                      'not have. %s', k, msg1)
     for k in model_state_dict:
         if not (k in state_dict):
-            LOG.debug('No param in pre-trained model %s. %s', k, msg)
-            state_dict[k] = model_state_dict[k]  # append missing params
+            LOG.debug('No param %s in pre-trained model. %s', k, msg2)
+            state_dict[k] = model_state_dict[k]  # append missing params to rescue
     model.load_state_dict(state_dict, strict=False)
     print(f'Network {model.__class__.__name__} weights have been resumed from checkpoint: {ckpt_path}')
 
     # resume optimizer parameters
     if optimizer is not None and resume_optimizer:
         if 'optimizer_state_dict' in checkpoint:
+            LOG.debug('Resume the optimizer.')
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
             # Here, we must convert the resumed state data of optimizer to gpu.
@@ -86,6 +91,7 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
             # In the training process, we need cuda version of state tensors,
             # so we have to convert them to gpu.
             if torch.cuda.is_available() and optimizer2cuda:
+                LOG.debug('Remove the optimizer states into GPU.')
                 for state in optimizer.state.values():
                     for k, v in state.items():
                         if torch.is_tensor(v):
@@ -94,13 +100,11 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
             # param_group['lr'] will be instead set in a separate fun: adjust_learning_rate()
             print('Optimizer {} has been resumed from the checkpoint at epoch {}.'
                   .format(optimizer.__class__.__name__, start_epoch - 1))
+        elif optimizer is not None:
+            print('Optimizer {} is NOT resumed, although the checkpoint exists.'.format(optimizer.__class__.__name__))
         else:
-            print('Optimizer {} has NO pre-trained weights in current checkpoint.'.format(optimizer.__class__.__name__))
-
-    if optimizer is not None and resume_optimizer:
-        return model, optimizer, start_epoch, start_loss
-    else:
-        return model, None, start_epoch, start_loss
+            print('Optimizer is {}.'.format(optimizer))
+    return model, optimizer, start_epoch, start_loss
 
 
 def save_model(path, epoch, train_loss, model, optimizer=None):
@@ -151,12 +155,14 @@ def initialize_weights(model):
 
 class NetworkWrap(torch.nn.Module):
     """Wrap the basenet and headnets into a single module."""
+
     def __init__(self, basenet, headnets):
         super(NetworkWrap, self).__init__()
         self.basenet = basenet
         # Notice!  subnets in list or dict must be warped
         # by ModuleList to register trainable params
         self.headnets = torch.nn.ModuleList(headnets)
+        LOG.debug('warp the basnet and headnets into a whole model')
 
     def forward(self, img_tensor):
         # Batch will be divided and Parallel Model
@@ -188,6 +194,7 @@ def basenet_factory(basenet_name):
             nstack = 4  # stacked number of hourglass
             hourglass_inp_dim = 256
             increase = 128  # increased channels once down-sampling through networks
+
         net_opt = IMHNOpt()
         out_dim = 50
-        raise Exception('Unknown base network in {}'.format(basenet_name))
+        raise Exception('unknown base network in {}'.format(basenet_name))

@@ -9,7 +9,7 @@ LOG = logging.getLogger(__name__)
 def cli(parser):
     group = parser.add_argument_group('logging')
     group.add_argument('--logging-output', default=None, type=str)
-    group.add_argument('--logging-stdout', default=False, action='store_true',
+    group.add_argument('--logging-stdout', default=False, type=bool,
                        help='print the detailed log at stdout stream')
     group.add_argument('--logging-write', default=True, type=bool,
                        help='write the detailed log into log file')
@@ -17,6 +17,8 @@ def cli(parser):
                        help='print debug messages')
     group.add_argument('-q', '--quiet', default=False, action='store_true',
                        help='only show warning messages or above')
+    group.add_argument('--shut-data-logging', default=False, action='store_true',
+                       help='shut up the logging info during data preparing')
 
 
 def configure(args):
@@ -30,10 +32,10 @@ def configure(args):
 
     # logging.warning('Who am I?')  # 这样调用其实是在root logger位置输出
     log_level = logging.INFO  # default is WARING
-    if args.quiet:
-        log_level = logging.WARNING
     if args.debug:
         log_level = logging.DEBUG
+    if args.quiet:
+        log_level = logging.WARNING
 
     # if no name if given, then name will be root;
     # if we give the name such as myfolder,
@@ -45,6 +47,10 @@ def configure(args):
         logger.addHandler(stdout_handler)  # bound handler to logger
     if args.logging_write:
         logger.addHandler(file_handler)
+
+    if args.shut_data_logging:
+        logging.getLogger("data").setLevel(logging.WARNING)
+        logging.getLogger("transforms").setLevel(logging.WARNING)
 
     LOG.info({
         'type': 'process',

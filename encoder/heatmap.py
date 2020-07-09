@@ -96,6 +96,7 @@ class HeatMapGenerator(object):
         # get the gaussian peak spread
         self.gaussian_size = 2 * math.ceil(
             (math.sqrt(-self.double_sigma2 * math.log(self.gaussian_clip_thre))) / stride)
+        assert self.gaussian_clip_thre > 0 and self.gaussian_size > 0, 'should bigger than zero'
         # cached common parameters which same for all iterations and all pictures
         self.out_w = self.in_w // stride
         self.out_h = self.in_h // stride
@@ -177,7 +178,7 @@ class HeatMapGenerator(object):
             # exp = np.exp(-dist)
 
             # overlap Gaussian peaks by taking the maximum
-            # must use slice view to overlap original array
+            # Must use slice view to overlap original array!
             patch = heatmaps[slice_y, slice_x, layer]
             mask = exp > patch
             patch[mask] = exp[mask]

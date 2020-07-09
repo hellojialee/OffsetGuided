@@ -43,8 +43,13 @@ def train_cli():
 
     parser.add_argument('--resume', '-r', action='store_true', default=False,
                         help='resume from checkpoint')
+    parser.add_argument('--drop-optim-state', dest='resume_optimizer', action='store_false',
+                        default=True,
+                        help='do not resume the optimizer from checkpoint.')
     parser.add_argument('--freeze', action='store_true', default=False,
                         help='freeze the pre-trained layers of the BaseNet, i.e. Backbone')
+    parser.add_argument('--drop-layers', action='store_true', default=False,
+                        help='drop some layers described in models.networks.load_model')
     parser.add_argument('--epochs', default=100, type=int, metavar='N',
                         help='number of epochs to train')
     parser.add_argument('--warmup', action='store_true', default=False,
@@ -52,7 +57,7 @@ def train_cli():
     parser.add_argument('--checkpoint-path', '-p',
                         default='link2checkpoints_storage',
                         help='folder path checkpoint storage of the whole pose estimation model')
-    parser.add_argument('--max-grad_norm', default=10, type=float,
+    parser.add_argument('--max-grad-norm', default=float('inf'), type=float,  # not implemented yet
                         help=(
                             "If the norm of the gradient vector exceeds this, "
                             "re-normalize it to have the norm equal to max_grad_norm"))
@@ -71,15 +76,15 @@ def train_cli():
                        help='print frequency (default: 10)')
 
     group = parser.add_argument_group('optimizer configuration')
-    group.add_argument('--optimizer', type=str, default='sgd',
+    group.add_argument('--optimizer', type=str, default='adam',
                        choices=['sgd', 'adam'])
-    group.add_argument('--learning-rate', type=float, default=2.5e-5,
+    group.add_argument('--learning-rate', type=float, default=2.5e-4,
                        metavar='LR',
                        help='learning rate')
     group.add_argument('--momentum', default=0.9, type=float, metavar='M',
-                       help='momentum')
-    group.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
-                       metavar='W', help='weight decay (default: 1e-4)')
+                       help='momentum for sgd')
+    group.add_argument('--weight-decay', '--wd', default=0, type=float,
+                       metavar='W', help='weight decay (e.g. 1e-4)')
 
     args = parser.parse_args()
 
@@ -102,19 +107,21 @@ def main():
     print(f"CUDNN VERSION: {torch.backends.cudnn.version()}\n")
 
     if args.local_rank == 0:
-
         # build epoch recorder
-        os.makedirs(args.checkpoint_path, exist_ok=True)
-        recorder = open(os.path.join('./' + args.checkpoint_path, 'log'), 'a+')
-        recorder.write('\ncmd line: {} \n \targs dict: {}'.format(' '.join(sys.argv), vars(args)))
-        recorder.flush()
-        recorder.close()
+        # os.makedirs(args.checkpoint_path, exist_ok=True)
+        with open(os.path.join(args.checkpoint_path, 'log'), 'a+') as f:
+            f.write('\n\ncmd line: {} \n \targs dict: {}'.format(' '.join(sys.argv), vars(args)))
+            f.flush()
 
     torch.backends.cudnn.benchmark = True
     # print(vars(args))
     args.pin_memory = False
+    args.use_cuda = False
     if torch.cuda.is_available():
+        args.use_cuda = True
         args.pin_memory = True
+    else:
+        raise ValueError(f'CUDA is available: {args.use_cuda}')
 
     args.distributed = False
     if 'WORLD_SIZE' in os.environ:
@@ -183,13 +190,26 @@ def main():
             if 'basenet' in name:
                 param.requires_grad = False
 
-    # optimizer = apex_optim.FusedSGD(filter(lambda p: p.requires_grad, model.parameters()),
-    #                                 lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=5e-4)
-    optimizer = torch.optim.SGD(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=args.learning_rate * args.world_size, momentum=args.momentum,
-        weight_decay=args.weight_decay)
-    # optimizer = apex_optim.FusedAdam(model.parameters(), lr=opt.learning_rate * args.world_size, weight_decay=1e-4)
+    if args.optimizer == 'sgd':
+        # optimizer = apex_optim.FusedSGD(
+        # filter(lambda p: p.requires_grad, model.parameters()),
+        # lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=5e-4)
+        optimizer = torch.optim.SGD(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=args.learning_rate * args.world_size, momentum=args.momentum,
+            weight_decay=args.weight_decay)
+    elif args.optimizer == 'adam':
+        optimizer = apex_optim.FusedAdam(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=args.learning_rate * args.world_size,
+            weight_decay=args.weight_decay)
+    else:
+        raise Exception(f'optimizer {args.optimizer} is not supported')
+
+    if args.resume:
+        model, optimizer, start_epoch, best_loss = models.networks.load_model(
+            model, args.checkpoint_whole, optimizer, resume_optimizer=args.resume_optimizer,
+            drop_layers=args.drop_layers, optimizer2cuda=args.use_cuda)
 
     # Initialize Amp.  Amp accepts either values or strings for the optional override arguments,
     # for convenient interoperation with argparse.
@@ -199,11 +219,6 @@ def main():
                                       loss_scale=args.loss_scale)  # Dynamic loss scaling is used by default.
     if args.distributed:
         model = DDP(model, delay_allreduce=True)
-
-    if args.resume:
-        model, optimizer, start_epoch, best_loss = models.networks.load_model(
-            model, args.checkpoint_whole, optimizer, resume_optimizer=True,
-            drop_layers=False, optimizer2cuda=True)
 
     train_sampler = None
     val_sampler = None
@@ -243,12 +258,13 @@ def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
     # disturb and allocation data differently at each epcoh
     # train_sampler make each GPU process see 1/(world_size) training samples per epoch
     if args.distributed:
+        #  calling the set_epoch method is needed to make shuffling work
         train_sampler.set_epoch(epoch)
 
     # adjust_learning_rate_cyclic(optimizer, epoch, start_epoch)  # start_epoch
     print(
-        '\nLearning rate at this epoch is: %0.9f' % optimizer.param_groups[0][
-            'lr'])  # scheduler.get_lr()[0]
+        '\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0][
+            'lr'])
 
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -258,7 +274,7 @@ def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
         # # ##############  Use fun of 'adjust learning rate' #####################
         adjust_learning_rate(optimizer, epoch, batch_idx, len(train_loader),
                              use_warmup=args.warmup)
-        # print('\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0]['lr'])  # scheduler.get_lr()[0]
+        LOG.debug('\nLearning rate at this batch is: %0.9f\n', optimizer.param_groups[0]['lr'])
         # # ##########################################################
 
         #  这允许异步 GPU 复制数据也就是说计算和数据传输可以同时进.
@@ -273,14 +289,16 @@ def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
         multi_losses = []
         for out, lossfun, anno in zip(outputs, criterion, anno_heads):
             multi_losses += list(lossfun(out, *anno))
-        # weight the multi-task losses
-        weighted_losses = [lam * l for lam, l in
+        # weight the multi-task losses, args.lambdas defined in models.factory
+        assert len(multi_losses) <= len(args.lambdas), 'lambdas is incomplete'
+        weighted_losses = [torch.mul(lam, l) for lam, l in
                            zip(args.lambdas, multi_losses)]
-        loss = sum(weighted_losses)  # args.lambdas defined in models.factory
+        loss = sum(weighted_losses)  # type: torch.Tensor
 
         if loss.item() > 1e8:  # try to rescue the gradient explosion
-            print("\nOh My God ! \nLoss is abnormal, drop this batch !")
-            continue
+            import warnings
+            warnings.warn("\nOh My God! \nLoss is abnormal, drop this batch!")
+            loss.zero_()
 
         LOG.info({
             'type': f'train-at-rank{args.local_rank}',
@@ -294,7 +312,9 @@ def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
         with amp.scale_loss(loss, optimizer) as scaled_loss:
             scaled_loss.backward()
 
-        # torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)  # todo
+        # According to our experience, clip norm is easy to destroy the training after few epochs
+        # torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
+
         optimizer.step()
 
         if batch_idx % args.print_freq == 0:
@@ -328,12 +348,10 @@ def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
     #
     if args.local_rank == 0:
         # Write the log file each epoch.
-        os.makedirs(args.checkpoint_path, exist_ok=True)
-        recorder = open(os.path.join('./' + args.checkpoint_path, 'log'), 'a+')
-        recorder.write('\nEpoch {}\ttrain_loss: {}'.format(epoch,
-                                                           losses.avg))  # validation时不要\n换行
-        recorder.flush()
-        recorder.close()
+        with open(os.path.join('./' + args.checkpoint_path, 'log'), 'a+') as f:
+            # validation时写字符串后不要\n换行
+            f.write('\nEpoch {}\ttrain_loss: {}'.format(epoch, losses.avg))
+            f.flush()
 
         if losses.avg < float('inf'):  # < best_loss
             # Update the best_loss if the average loss drops
@@ -367,7 +385,7 @@ def test(val_loader, val_sampler, model, criterion, optimizer, epoch):
             for out, lossfun, anno in zip(outputs, criterion, anno_heads):
                 multi_losses += list(lossfun(out, *anno))
             # weight the multi-task losses
-            weighted_losses = [lam * l for lam, l in
+            weighted_losses = [torch.mul(lam, l) for lam, l in
                                zip(args.lambdas, multi_losses)]
             loss = sum(weighted_losses)  # args.lambdas defined in models.factory
 
@@ -375,6 +393,7 @@ def test(val_loader, val_sampler, model, criterion, optimizer, epoch):
             'type': f'validate-at-rank{args.local_rank}',
             'epoch': epoch,
             'batch': batch_idx,
+            # 'metas': metas,
             'head_losses': [round(to_python_float(l.detach()) if torch.is_tensor(l) else l, 6)
                             for l in multi_losses],
             'loss': round(to_python_float(loss.detach()), 6),
@@ -406,11 +425,9 @@ def test(val_loader, val_sampler, model, criterion, optimizer, epoch):
 
     if args.local_rank == 0:  # Print them in the Process 0
         # Write the log file each epoch.
-        os.makedirs(args.checkpoint_path, exist_ok=True)
-        logger = open(os.path.join('./' + args.checkpoint_path, 'log'), 'a+')
-        logger.write('\tval_loss: {}'.format(losses.avg))  # validation时不要\n换行
-        logger.flush()
-        logger.close()
+        with open(os.path.join('./' + args.checkpoint_path, 'log'), 'a+') as f:
+            f.write('\tval_loss: {}'.format(losses.avg))  # validation时不要\n换行
+            f.flush()
 
 
 def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
@@ -421,12 +438,12 @@ def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
 
     lr = args.learning_rate * args.world_size * (0.2 ** factor)
 
-    """Warmup"""
+    """Warmup the learning rate"""
     if use_warmup:
-        if epoch < 5:
+        if epoch < 12:
             # print('=============>  Using warm-up learning rate....')
             lr = lr * float(1 + step + epoch * len_epoch) / (
-                    5. * len_epoch)  # len_epoch=len(train_loader)
+                    12. * len_epoch)  # len_epoch=len(train_loader)
 
     # if(args.local_rank == 0):
     #     print("epoch = {}, step = {}, lr = {}".format(epoch, step, lr))

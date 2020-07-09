@@ -127,6 +127,7 @@ def dataset_factory(args, preprocess, target_transforms):
 
 if __name__ == '__main__':  # for debug
     from time import time
+    import timeit
     import argparse
     import encoder
     import matplotlib.pyplot as plt
@@ -169,6 +170,7 @@ if __name__ == '__main__':  # for debug
             mask_miss = annos[0][-1].numpy().astype(np.float32)  # bool -> float
             bg_hmp = annos[0][1].numpy()
             offset = annos[1][0].numpy()
+            offset[np.isinf(offset)] = 0
 
             # # show the generated ground truth
             if show_image:
@@ -226,28 +228,9 @@ if __name__ == '__main__':  # for debug
                                n_images=1000, shuffle=True)
 
     # test the data generator
-    # print(timeit.timeit(stmt='test_augmentation_speed(val_client, False)',  # True
-    #                     setup="from __main__ import test_augmentation_speed;"
-    #                           "from __main__ import val_client",
-    #                     number=3))  # run for number times  # generate 17 samples per second
-
-    test_val_loader = torch.utils.data.DataLoader(
-        val_client, batch_size=args.batch_size, shuffle=False,
-        pin_memory=args.pin_memory,
-        num_workers=args.loader_workers, drop_last=True)
-
-    t0 = time()
-    count = 0
-    print(torch.cuda.get_device_name(0))
-    torch.backends.cudnn.benchmark = True
-    for epoch in range(20):
-        for bath_id, (images, annos, metas) in enumerate(test_val_loader):
-            annos = [[x.cuda() for x in pack] for pack in annos]
-            img = images[0]  # .cuda(non_blocking=True)  # , non_blocking=True
-            count += len(img)
-            print(bath_id, ' of ', epoch)
-            if count > 200:
-                break
-    print('**************** ', count / (time() - t0))
+    print(timeit.timeit(stmt='test_augmentation_speed(val_client, True)',  # True
+                        setup="from __main__ import test_augmentation_speed;"
+                              "from __main__ import val_client",
+                        number=3))  # run for number times  # generate 17 samples per second
 
 
