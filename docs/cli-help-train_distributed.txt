@@ -1,7 +1,8 @@
 python3 train_distributed.py --help
 usage: train_distributed.py [-h] [--logging-output LOGGING_OUTPUT]
-                            [--logging-stdout] [--logging-write LOGGING_WRITE]
-                            [--debug] [-q]
+                            [--logging-stdout LOGGING_STDOUT]
+                            [--logging-write LOGGING_WRITE] [--debug] [-q]
+                            [--shut-data-logging]
                             [--train-annotations TRAIN_ANNOTATIONS]
                             [--train-image-dir TRAIN_IMAGE_DIR]
                             [--val-annotations VAL_ANNOTATIONS]
@@ -28,14 +29,17 @@ usage: train_distributed.py [-h] [--logging-output LOGGING_OUTPUT]
                             [--stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]]
                             [--hmp-loss {l2_loss,focal_l2_loss}]
                             [--offset-loss {offset_l1_loss,offset_laplace_loss}]
-                            [--scale-loss {scale_l1_loss}]
+                            [--sqrt-re] [--scale-loss {scale_l1_loss}]
+                            [--ftao FTAO] [--fgamma FGAMMA]
+                            [--lmargin LMARGIN]
                             [--gaussian-clip-thre GAUSSIAN_CLIP_THRE]
                             [--sigma SIGMA]
                             [--fill-scale-size FILL_SCALE_SIZE]
-                            [--min_scale MIN_SCALE] [--resume] [--freeze]
+                            [--min_scale MIN_SCALE] [--resume]
+                            [--drop-optim-state] [--freeze] [--drop-layers]
                             [--epochs N] [--warmup]
                             [--checkpoint-path CHECKPOINT_PATH]
-                            [--max-grad_norm MAX_GRAD_NORM]
+                            [--max-grad-norm MAX_GRAD_NORM]
                             [--local_rank LOCAL_RANK] [--opt-level OPT_LEVEL]
                             [--no-sync-bn]
                             [--keep-batchnorm-fp32 KEEP_BATCHNORM_FP32]
@@ -49,26 +53,33 @@ Distributed training with Nvidia Apex
 optional arguments:
   -h, --help            show this help message and exit
   --resume, -r          resume from checkpoint (default: False)
+  --drop-optim-state    do not resume the optimizer from checkpoint. (default:
+                        True)
   --freeze              freeze the pre-trained layers of the BaseNet, i.e.
                         Backbone (default: False)
+  --drop-layers         drop some layers described in
+                        models.networks.load_model (default: False)
   --epochs N            number of epochs to train (default: 100)
   --warmup              using warm-up learning rate (default: False)
   --checkpoint-path CHECKPOINT_PATH, -p CHECKPOINT_PATH
                         folder path checkpoint storage of the whole pose
                         estimation model (default: link2checkpoints_storage)
-  --max-grad_norm MAX_GRAD_NORM
+  --max-grad-norm MAX_GRAD_NORM
                         If the norm of the gradient vector exceeds this, re-
                         normalize it to have the norm equal to max_grad_norm
-                        (default: 10)
+                        (default: inf)
 
 logging:
   --logging-output LOGGING_OUTPUT
-  --logging-stdout      print the detailed log at stdout stream (default:
+  --logging-stdout LOGGING_STDOUT
+                        print the detailed log at stdout stream (default:
                         False)
   --logging-write LOGGING_WRITE
                         write the detailed log into log file (default: True)
   --debug               print debug messages (default: False)
   -q, --quiet           only show warning messages or above (default: False)
+  --shut-data-logging   shut up the logging info during data preparing
+                        (default: False)
 
 dataset and loader:
   --train-annotations TRAIN_ANNOTATIONS
@@ -122,7 +133,7 @@ base network configuration:
   --no-pretrain         create BaseNet without pretraining (default: True)
   --basenet-checkpoint BASENET_CHECKPOINT
                         Path to the pre-trained model and optimizer. (default:
-                        ../weights/hourglass_104_renamed.pth)
+                        weights/hourglass_104_renamed.pth)
 
 head network configuration:
   --headnets HEADNETS [HEADNETS ...]
@@ -141,7 +152,7 @@ head network configuration:
 loss configuration:
   --lambdas LAMBDAS [LAMBDAS ...]
                         learning task wights, directly multiply, not averaged
-                        (default: [1, 1, 0.001, 1])
+                        (default: [1, 1, 1, 1])
   --stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]
                         loss weights of different stacks, weighted-sum
                         averaged (default: [1, 1])
@@ -149,9 +160,17 @@ loss configuration:
                         loss for heatmap regression (default: focal_l2_loss)
   --offset-loss {offset_l1_loss,offset_laplace_loss}
                         loss for offeset regression (default: offset_l1_loss)
+  --sqrt-re             rescale the offset loss using torch.sqrt (default:
+                        False)
   --scale-loss {scale_l1_loss}
                         loss for keypoint scale regression (default:
                         scale_l1_loss)
+  --ftao FTAO           threshold between fore/background in focal L2 loss
+                        during training (default: 0.01)
+  --fgamma FGAMMA       order of scaling factor in focal L2 loss during
+                        training (default: 1)
+  --lmargin LMARGIN     offset length below this value will not be punished
+                        during training (default: 0.1)
 
 heatmap encoder:
   --gaussian-clip-thre GAUSSIAN_CLIP_THRE
@@ -178,7 +197,7 @@ apex configuration:
 
 optimizer configuration:
   --optimizer {sgd,adam}
-  --learning-rate LR    learning rate (default: 2.5e-05)
-  --momentum M          momentum (default: 0.9)
+  --learning-rate LR    learning rate (default: 0.00025)
+  --momentum M          momentum for sgd (default: 0.9)
   --weight-decay W, --wd W
-                        weight decay (default: 1e-4) (default: 0.0001)
+                        weight decay (e.g. 1e-4) (default: 0)

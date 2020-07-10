@@ -51,6 +51,7 @@ def configure(args):
     if args.shut_data_logging:
         logging.getLogger("data").setLevel(logging.WARNING)
         logging.getLogger("transforms").setLevel(logging.WARNING)
+        logging.getLogger("encoder").setLevel(logging.WARNING)
 
     LOG.info({
         'type': 'process',

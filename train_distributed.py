@@ -52,6 +52,8 @@ def train_cli():
                         help='drop some layers described in models.networks.load_model')
     parser.add_argument('--epochs', default=100, type=int, metavar='N',
                         help='number of epochs to train')
+    parser.add_argument('--recount-epoch', default=False, action='store_true',
+                        help='reset the epoch counter to 0')
     parser.add_argument('--warmup', action='store_true', default=False,
                         help='using warm-up learning rate')
     parser.add_argument('--checkpoint-path', '-p',
@@ -245,9 +247,13 @@ def main():
                                              drop_last=True)
 
     # ############################# Train and Validate #############################
+    LOG.debug('multi-task learning scaling factors is %s: ', args.lambdas)
+    if args.recount_epoch:  # restart the epoch counter
+        start_epoch = 0
     for epoch in range(start_epoch, start_epoch + args.epochs):
         train(train_loader, train_sampler, model, lossfuns, optimizer, epoch)
         test(val_loader, val_sampler, model, lossfuns, optimizer, epoch)
+    # ##############################################################################
 
 
 def train(train_loader, train_sampler, model, criterion, optimizer, epoch):

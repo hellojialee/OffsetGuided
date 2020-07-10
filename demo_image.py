@@ -5,6 +5,7 @@ import cv2
 import matplotlib.pyplot as plt
 import time
 import datetime
+import numpy as np
 
 import torch
 import torch.distributed as dist
@@ -15,6 +16,7 @@ import transforms
 import encoder
 import models
 import logs
+from visualization.show import draw_limb_offset
 
 try:
     from apex.parallel import DistributedDataParallel as DDP
@@ -48,6 +50,8 @@ def demo_cli():
     parser.add_argument('--checkpoint-path', '-p',
                         default='link2checkpoints_storage',
                         help='folder path checkpoint storage of the whole pose estimation model')
+    parser.add_argument('--show-limb-idx', default=None, type=int, metavar='N',
+                        help='draw the vector of limb connection offset and connected keypoints')
 
     group = parser.add_argument_group('apex configuration')
     group.add_argument("--local_rank", default=0, type=int)
@@ -59,9 +63,9 @@ def demo_cli():
     group.add_argument('--print-freq', '-f', default=10, type=int, metavar='N',
                        help='print frequency (default: 10)')
 
-    args = parser.parse_args(
-        '--checkpoint-whole link2checkpoints_storage/PoseNet_3_epoch.pth --resume --no-pretrain'.split())
-
+    # args = parser.parse_args(
+    #     '--checkpoint-whole link2checkpoints_storage/PoseNet_18_epoch.pth --resume --no-pretrain'.split())
+    args = parser.parse_args()
     return args
 
 
@@ -121,7 +125,6 @@ def main():
                            keep_batchnorm_fp32=args.keep_batchnorm_fp32,
                            loss_scale=args.loss_scale)
 
-
     # 创建数据加载器，在训练和验证步骤中喂数据
     train_loader = torch.utils.data.DataLoader(train_data,
                                                batch_size=args.batch_size,
@@ -138,15 +141,23 @@ def main():
 
     # ############################# Train and Validate #############################
     for epoch in range(start_epoch, start_epoch + args.epochs):
-        test(train_loader, model, lossfuns, epoch)
+        test(val_loader, model, lossfuns, epoch, show_limb_idx=args.show_limb_idx)
 
 
-def test(val_loader, model, criterion, epoch, show_image=True):
+def test(val_loader, model, criterion, epoch, show_limb_idx=None, s=5):
+    """
+    Args:
+        val_loader:
+        model:
+        criterion:
+        epoch:
+        show_limb_idx (int): show the limb connection offset vector with this index
+        s (int): control the sparsity of the vector arrows
+    """
     print('\n ############################# Test phase, Epoch: {} #############################'.format(epoch))
     model.eval()
-    # DistributedSampler 中记录目前的 epoch 数， 因为采样器是根据 epoch 来决定如何打乱分配数据进各个进程
     # if args.distributed:
-    #     val_sampler.set_epoch(epoch)  # 验证集太小，不够4个划分
+    #     val_sampler.set_epoch(epoch)
     batch_time = AverageMeter()
     losses = AverageMeter()
     end = time.time()
@@ -176,21 +187,17 @@ def test(val_loader, model, criterion, epoch, show_image=True):
             'loss': round(to_python_float(loss.detach()), 6),
         })
 
-        if show_image:
-            import numpy as np
+        if show_limb_idx:
             hmps = outputs[0][0][1].cpu().numpy()
             offs = outputs[1][0][1].cpu().numpy()
             offs[np.isinf(offs)] = 0
+            hmp = hmps[0]
+            off = offs[0]
             image = images.cpu().numpy()[0, ...].transpose((1, 2, 0))  # the first image
-            show_labels = cv2.resize(hmps[0].transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
-            # offsets = cv2.resize(offsets.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
-            # mask_miss = np.repeat(mask_miss.transpose((1, 2, 0)), 3, axis=2)
-            # mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
-            # image = cv2.resize(image, mask_miss.shape[:2], interpolation=cv2.INTER_NEAREST)
-            plt.imshow(image)  # We manually set Opencv earlier: RGB
-            # plt.imshow(mask_miss, alpha=0.5)  # mask_all
-            plt.imshow(show_labels[:, :, 15], alpha=0.5)  # mask_all
-            plt.show()
+
+            skeleton = encoder.OffsetMaps.skeleton
+
+            draw_limb_offset(hmp, image, off, s, show_limb_idx, skeleton)
 
         if batch_idx % args.print_freq == 0:
             reduced_loss = loss.data

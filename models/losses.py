@@ -4,31 +4,36 @@ import re
 
 LOG = logging.getLogger(__name__)
 
+
 TAU = 0.01  # threshold between fore/background in focal L2 loss during training
 GAMMA = 1  # order of scaling factor in focal L2 loss during training
 MARGIN = 0.1  # offset length below this value will not be punished
 
 
 def l1(x, t):
-    """Compute the L1 loss of two tensors."""
-    return torch.abs(x - t).sum()
+    """Compute the element-wise L1 loss of two tensors."""
+    out = torch.abs(x - t)
+    return out
 
 
 def l2(x, t):
+    """Element-wise L2 loss"""
     out = torch.mul((x - t) ** 2, 0.5)
-    return out.sum()
+    return out
 
 
 def laplace(norm, logb):
+    """Element-wise laplace loss"""
     out = 0.693147 + logb + norm * torch.exp(-logb)
-    return out.sum()
+    return out
 
 
 def focal_l2(s, sxing, tau=TAU, gamma=GAMMA):
+    """Element-wise focal l2 loss"""
     st = torch.where(torch.ge(sxing, tau), s, 1. - s)
     factor = torch.abs(1. - st) ** gamma
     out = torch.mul((s - sxing) ** 2 * factor, 0.5)
-    return out.sum()
+    return out
 
 
 def tensor_loss(pred, gt, mask_miss, fun):
@@ -73,6 +78,8 @@ class LossChoice(object):
 
     @staticmethod
     def offset_l1_loss(pred, gt, _, mask_miss):
+        """sqrt_re may be used in lossfun Class to rescale the delta x, y element-wisely,
+        other than based on vetctor length """
         return tensor_loss(pred, gt, mask_miss, l1)
 
     @staticmethod
@@ -134,14 +141,16 @@ class HeatMapsLoss(object):
         out1, out2 = [], []
 
         for stack_i, (hmp, bg_hmp) in enumerate(zip(hmps, bg_hmps)):  # loop each stack
-
-            weighted_loss = torch.mul(self.hmp_loss(hmp, gt_hpm, mask_miss), self.stack_weights[stack_i])
+            inter1 = self.hmp_loss(hmp, gt_hpm, mask_miss)  # type: torch.Tensor
+            weighted_loss = torch.mul(inter1.sum(), self.stack_weights[stack_i])
             out1.append(weighted_loss)
 
             if len(bg_hmp) > 0:  # background heatmap loss
-                weighted_bgloss = torch.mul(self.hmp_loss(bg_hmp, gt_bghmp, mask_miss), self.stack_weights[stack_i])
+                inter2 = self.hmp_loss(bg_hmp, gt_bghmp, mask_miss)  # type: torch.Tensor
+                weighted_bgloss = torch.mul(inter2.sum(), self.stack_weights[stack_i])
                 out2.append(weighted_bgloss)
-        LOG.debug('hmp loss: %s, \t background hmp loss: %s', out1, out2)
+        LOG.debug('hmp loss at each stack: %s, \t background hmp loss at eack stack: %s'
+                  , torch.tensor(out1).cpu().numpy().tolist(), torch.tensor(out2).cpu().numpy().tolist())
         return sum(out1) / batch_size, sum(out2) / batch_size
 
 
@@ -156,7 +165,7 @@ class OffsetMapsLoss(object):
         self.stack_weights = [weight / sum(stack_weights) for weight in stack_weights]
         self.off_loss = off_loss
         self.s_loss = s_loss
-        self.sqrt_re = sqrt_re  # resize the offset loss by log
+        self.sqrt_re = sqrt_re  # resize the offset loss by
 
         LOG.debug('%s loss config: n_stacks = %d, stack_weights = %s, losses = %s, %s, ',
                   head_name, n_stacks, stack_weights,
@@ -174,19 +183,18 @@ class OffsetMapsLoss(object):
 
         for stack_i, (pred_off, pred_spread, pred_s) in enumerate(
                 zip(pred_off_stacks, pred_spread_stacks, pred_scale_stacks)):
-            inter1 = torch.mul(
-                self.off_loss(pred_off, gt_off, pred_spread, mask_miss),
-                self.stack_weights[stack_i])
+            inter1 = self.off_loss(pred_off, gt_off, pred_spread, mask_miss)
             if self.sqrt_re:
-                inter1 = torch.sqrt(inter1 + MARGIN)  # fixme
-            out1.append(inter1)
+                inter1 = torch.sqrt(inter1 + MARGIN)  # type: torch.Tensor # todo: tune the MARGIN?
+            weighted_offloss = torch.mul(inter1.sum(), self.stack_weights[stack_i])
+            out1.append(weighted_offloss)
 
             if len(pred_s) > 0:
-                inter2 = torch.mul(
-                    self.s_loss(pred_s, gt_s, mask_miss),
-                    self.stack_weights[stack_i])
-                out2.append(inter2)
-        LOG.debug('connection offset loss: %s, \t keypoint scale loss: %s', out1, out2)
+                inter2 = self.s_loss(pred_s, gt_s, mask_miss)  # type: torch.Tensor
+                weighted_sloss = torch.mul(inter2.sum(), self.stack_weights[stack_i])
+                out2.append(weighted_sloss)
+        LOG.debug('connection offset loss at each stack: %s, \t keypoint scale loss at each stack: %s'
+                  , torch.tensor(out1).cpu().numpy().tolist(), torch.tensor(out2).cpu().numpy().tolist())
         return sum(out1) / batch_size, sum(out2) / batch_size
 
 
@@ -203,6 +211,7 @@ def lossfuncs_factory(headnames, n_stacks, stack_weights,
 
     off_loss = getattr(LossChoice, offset_loss)
     s_loss = getattr(LossChoice, scale_loss)
+    LOG.debug('tau = %.4f, gamma = %d, margin = %.4f', TAU, GAMMA, MARGIN)
 
     lossnets = [factory_loss(h, n_stacks, stack_weights, hmp_loss, off_loss, s_loss, sqrt_re)
                 for h in headnames]

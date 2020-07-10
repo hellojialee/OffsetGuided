@@ -4,6 +4,8 @@ Copied from openpifpaf
 from contextlib import contextmanager
 
 import numpy as np
+from numpy import ma
+import cv2
 from PIL import Image
 
 try:
@@ -14,6 +16,47 @@ try:
 except ImportError:
     matplotlib = None
     plt = None
+
+
+def draw_limb_offset(hmp, image, off, s, show_limb_idx, skeleton, thre=0.3):
+    """
+    Draw the limb connection offset vector and connected keypoints.
+    Args:
+        hmp: heatmap of shape (out_w, out_h, C)
+        image: RGB image of shape (W, H, 3)
+        off: offsetmap  of shape (out_w, out_h, 2*L)
+        s (int): control the sparsity of the vector arrows
+        show_limb_idx (int): show the limb connection offset vector with this index
+        skeleton: human skeleton configuration
+        thre (float): threshold to filter out low responses
+    """
+    # first ,we should roughly rescale the image into the range of [0, 1]
+    image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
+
+    hmp = cv2.resize(hmp.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
+    off = cv2.resize(off.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
+    connect_idx = show_limb_idx
+    s = s
+    joint_f, joint_t = skeleton[connect_idx]
+    plt.imshow(image)
+    plt.imshow(hmp[:, :, joint_f], alpha=0.5)  # mask_all
+    plt.show()
+    plt.imshow(image)  # We manually set Opencv earlier: RGB
+    plt.imshow(hmp[:, :, joint_t], alpha=0.5)  # mask_all
+    plt.show()
+    U = off[:, :, 2 * connect_idx]  # vector
+    V = off[:, :, 2 * connect_idx + 1]
+    X, Y = np.meshgrid(np.arange(U.shape[1]), np.arange(U.shape[0]))  # start point
+    M = np.zeros(U.shape, dtype='bool')
+    M[hmp[:, :, joint_f] < thre] = True  # filter out vectors with those low response
+    U = ma.masked_array(U, mask=M)  # 将满足条件的M位置的数据掩盖掉
+    V = ma.masked_array(V, mask=M)
+    plt.figure()
+    plt.imshow(image, alpha=.5)
+    Q = plt.quiver(X[::s, ::s], Y[::s, ::s], U[::s, ::s], V[::s, ::s],
+                   angles='xy', scale_units='xy', scale=1, color='r',
+                   alpha=None, headaxislength=4, width=0.001)
+    plt.show()
 
 
 # 上下文管理也可以通过编写__enter__和__exit__实现，但仍然很繁琐，因此Python的标准库contextlib提供了更简单的写法

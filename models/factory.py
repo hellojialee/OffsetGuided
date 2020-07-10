@@ -9,7 +9,8 @@ LOG = logging.getLogger(__name__)
 def net_cli(parser):
     group = parser.add_argument_group('model configuration')
     group.add_argument('--initialize-whole', default=True, type=bool,
-                       help='randomly initialize the basenet and headnets')
+                       help='randomly initialize the basenet and headnets, '
+                            'just set it to True if you are not certain')
     group.add_argument('--checkpoint-whole', default=None, type=str,
                        help='the checkpoint pach to the whole model (basenet+headnets)')
 
@@ -42,12 +43,13 @@ def net_cli(parser):
                             'in separate channels')
 
     group = parser.add_argument_group('loss configuration')
-    group.add_argument('--lambdas', default=[1, 1, 1, 1],  # 0.001
+    group.add_argument('--lambdas', default=[1, 1, 0.01, 1],
                        type=float, nargs='+',
-                       help='learning task wights, directly multiply, not averaged')
+                       help='learning task scaling factors for hmp_loss, bg_hmp_loss, '
+                            'offset_loss and scale_loss, directly multiplied, not averaged')
     group.add_argument('--stack-weights', default=[1, 1],
                        type=float, nargs='+',
-                       help='loss weights of different stacks, weighted-sum averaged')
+                       help='loss weights for different stacks, weighted-sum averaged')
     group.add_argument('--hmp-loss', default='focal_l2_loss',
                        choices=['l2_loss', 'focal_l2_loss'],
                        help='loss for heatmap regression')
@@ -133,7 +135,7 @@ def debug_parse_args():
                         help='this parse is only for debug the code')
 
     net_cli(parser)
-    args = parser.parse_args('--for-debug '.split())
+    args = parser.parse_args('--for-debug --lmargin 0.00002 --include-spread --include-background'.split())
     return args
 
 

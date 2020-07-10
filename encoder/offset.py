@@ -162,8 +162,8 @@ class OffsetMapGenerator(object):
             slice_x = slice(x_min, x_max + 1)
             slice_y = slice(y_min, y_max + 1)
 
-            offset_x = (joint2[0] - self.grid_x[slice_x].astype(np.float32))
-            # type: np.ndarray # joint2[i, 1] -> y
+            offset_x = (joint2[0] - self.grid_x[slice_x].astype(np.float32))  # type: np.ndarray
+            # joint2[i, 1] -> y
             offset_y = (joint2[1] - self.grid_y[slice_y].astype(np.float32))
             offset_x_mesh = np.repeat(offset_x.reshape(1, -1), offset_y.shape[0], axis=0)
             offset_y_mesh = np.repeat(offset_y.reshape(-1, 1), offset_x.shape[0], axis=1)
