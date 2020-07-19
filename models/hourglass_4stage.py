@@ -46,7 +46,7 @@ class Hourglass4Stage(nn.Module):
     """
     Pack or initialize the trainable parameters of the network
 
-    Attributes:
+    Arg:
         nstack: number of stack
         inp_dim: input tensor channels fed into the hourglass block
         oup_dim: channels of regressed feature maps

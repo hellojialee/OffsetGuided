@@ -6,9 +6,15 @@ import argparse
 LOG = logging.getLogger(__name__)
 
 
+def boolean_string(s):
+    if s not in {'False', 'True'}:
+        raise ValueError('Not a valid boolean string')
+    return s == 'True'
+
+
 def net_cli(parser):
     group = parser.add_argument_group('model configuration')
-    group.add_argument('--initialize-whole', default=True, type=bool,
+    group.add_argument('--initialize-whole', default=True, type=boolean_string,
                        help='randomly initialize the basenet and headnets, '
                             'just set it to True if you are not certain')
     group.add_argument('--checkpoint-whole', default=None, type=str,
@@ -103,7 +109,7 @@ def model_factory(args):
             args.scale_loss,
             args.sqrt_re)
 
-        model = networks.NetworkWrap(basenet, headnets)
+        model = networks.NetworkWrapper(basenet, headnets)
 
         return model, lossfuncs
 
@@ -120,7 +126,7 @@ def hourglass_from_scratch(base_name, pretrained, basenet_checkpoint, initialize
         basenet = networks.initialize_weights(basenet)
 
     if pretrained:
-        basenet, _, _, _ = networks.load_model(
+        basenet, _, _, _, _ = networks.load_model(
             basenet, basenet_checkpoint)
 
     return basenet, n_stacks, stride, feature_dim

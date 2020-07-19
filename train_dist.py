@@ -72,8 +72,8 @@ def train_cli():
                        help='enabling apex sync BN.')
     group.add_argument('--keep-batchnorm-fp32', type=str, default=None)
     group.add_argument('--loss-scale', type=str, default=None)  # '1.0'
-    group.add_argument('--channels-last', type=bool,
-                       default=False)  # fixme: channel last may lead to 22% speed up
+    group.add_argument('--channels-last', default=False, action='store_true',
+                       help='channel last may lead to 22% speed up')  # fixme: channel last may lead to 22% speed up
     group.add_argument('--print-freq', '-f', default=10, type=int, metavar='N',
                        help='print frequency (default: 10)')
 
@@ -106,6 +106,7 @@ def main():
     print(f"\nopt_level = {args.opt_level}")
     print(f"keep_batchnorm_fp32 = {args.keep_batchnorm_fp32}")
     print(f"loss_scale = {args.loss_scale}")
+    print(f"Using {torch.cuda.device_count()} GPUs for training")
     print(f"CUDNN VERSION: {torch.backends.cudnn.version()}\n")
 
     if args.local_rank == 0:
@@ -208,17 +209,20 @@ def main():
     else:
         raise Exception(f'optimizer {args.optimizer} is not supported')
 
-    if args.resume:
-        model, optimizer, start_epoch, best_loss = models.networks.load_model(
-            model, args.checkpoint_whole, optimizer, resume_optimizer=args.resume_optimizer,
-            drop_layers=args.drop_layers, optimizer2cuda=args.use_cuda)
-
     # Initialize Amp.  Amp accepts either values or strings for the optional override arguments,
     # for convenient interoperation with argparse.
     model, optimizer = amp.initialize(model, optimizer,
                                       opt_level=args.opt_level,
                                       keep_batchnorm_fp32=args.keep_batchnorm_fp32,
                                       loss_scale=args.loss_scale)  # Dynamic loss scaling is used by default.
+    if args.resume:
+        model, optimizer, start_epoch, best_loss, amp_state = models.networks.load_model(
+            model, args.checkpoint_whole, optimizer=optimizer, resume_optimizer=args.resume_optimizer,
+            drop_layers=args.drop_layers, optimizer2cuda=args.use_cuda, load_amp=True)
+        if amp_state:
+            print(f'Amp state has been restored from the checkpoint at epoch {start_epoch - 1}.')
+            amp.load_state_dict(amp_state)  # load amp_state after amp.initialize
+
     if args.distributed:
         model = DDP(model, delay_allreduce=True)
 
@@ -257,7 +261,7 @@ def main():
 
 
 def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
-    print('\n ############### Train phase, Epoch: {} #############'.format(
+    print('\n ======================= Train phase, Epoch: {} ======================='.format(
         epoch))
     torch.cuda.empty_cache()
     model.train()
@@ -280,7 +284,7 @@ def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
         # # ##############  Use fun of 'adjust learning rate' #####################
         adjust_learning_rate(optimizer, epoch, batch_idx, len(train_loader),
                              use_warmup=args.warmup)
-        LOG.debug('\nLearning rate at this batch is: %0.9f\n', optimizer.param_groups[0]['lr'])
+        LOG.debug('\nLearning rate at this batch is: %0.9f', optimizer.param_groups[0]['lr'])
         # # ##########################################################
 
         #  这允许异步 GPU 复制数据也就是说计算和数据传输可以同时进.
@@ -339,10 +343,10 @@ def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
             end = time.time()
 
             if args.local_rank == 0:  # Print them in the Process 0
-                print('==================> Epoch: [{0}][{1}/{2}]\t'
+                print('Epoch: [{0}][{1}/{2}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Speed {3:.3f} ({4:.3f})\t'
-                      'Loss {loss.val:.10f} ({loss.avg:.4f}) <================ \t'.format(
+                      'Loss {loss.val:.10f} ({loss.avg:.4f}) \t'.format(
                     epoch, batch_idx, len(train_loader),
                     args.world_size * args.batch_size / batch_time.val,
                     args.world_size * args.batch_size / batch_time.avg,
@@ -365,11 +369,12 @@ def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
 
             save_path = './' + args.checkpoint_path + '/PoseNet_' + str(
                 epoch) + '_epoch.pth'
-            models.networks.save_model(save_path, epoch, best_loss, model, optimizer)
+            models.networks.save_model(save_path, epoch, best_loss,
+                                       model, optimizer, amp_state=amp.state_dict())
 
 
 def test(val_loader, val_sampler, model, criterion, optimizer, epoch):
-    print('\n ############################# Test phase, Epoch: {} #############################'.format(epoch))
+    print('\n ======================= Test phase, Epoch: {} ======================='.format(epoch))
     model.eval()
     # DistributedSampler 中记录目前的 epoch 数， 因为采样器是根据 epoch 来决定如何打乱分配数据进各个进程
     # if args.distributed:
@@ -419,10 +424,10 @@ def test(val_loader, val_sampler, model, criterion, optimizer, epoch):
             end = time.time()
 
             if args.local_rank == 0:  # Print them in the Process 0
-                print('==================> Epoch: [{0}][{1}/{2}]\t'
+                print('Epoch: [{0}][{1}/{2}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Speed {3:.3f} ({4:.3f})\t'
-                      'Loss {loss.val:.10f} ({loss.avg:.4f}) <================ \t'.format(
+                      'Loss {loss.val:.10f} ({loss.avg:.4f}) \t'.format(
                     epoch, batch_idx, len(val_loader),
                     args.world_size * args.batch_size / batch_time.val,
                     args.world_size * args.batch_size / batch_time.avg,
@@ -443,6 +448,9 @@ def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
         factor = (epoch - 78) // 5
 
     lr = args.learning_rate * args.world_size * (0.2 ** factor)
+
+    if epoch > 70:  # FIXME
+        lr = 2e-5
 
     """Warmup the learning rate"""
     if use_warmup:

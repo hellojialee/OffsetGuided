@@ -18,62 +18,68 @@ except ImportError:
     plt = None
 
 
-def draw_limb_offset(hmp, image, off, s, show_limb_idx, skeleton, thre=0.3):
+def draw_limb_offset(hmp, image, off, show_limb_idx, skeleton, s=5, thre=0.3):
     """
     Draw the limb connection offset vector and connected keypoints.
     Args:
-        hmp: heatmap of shape (out_w, out_h, C)
-        image: RGB image of shape (W, H, 3)
-        off: offsetmap  of shape (out_w, out_h, 2*L)
-        s (int): control the sparsity of the vector arrows
+        hmp (numpy array): heatmap of shape (out_w, out_h, C)
+        image (numpy array): RGB image of shape (W, H, 3) in the range [0.0, 1.0]
+        off (numpy array): offsetmap  of shape (out_w, out_h, 2*L)
         show_limb_idx (int): show the limb connection offset vector with this index
         skeleton: human skeleton configuration
+        s (int): control the sparsity of the vector arrows
         thre (float): threshold to filter out low responses
+
+    Returns:
+
     """
-    # first ,we should roughly rescale the image into the range of [0, 1]
-    image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
 
     hmp = cv2.resize(hmp.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
     off = cv2.resize(off.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
     connect_idx = show_limb_idx
     s = s
     joint_f, joint_t = skeleton[connect_idx]
-    plt.imshow(image)
-    plt.imshow(hmp[:, :, joint_f], alpha=0.5)  # mask_all
-    plt.show()
-    plt.imshow(image)  # We manually set Opencv earlier: RGB
-    plt.imshow(hmp[:, :, joint_t], alpha=0.5)  # mask_all
-    plt.show()
-    U = off[:, :, 2 * connect_idx]  # vector
-    V = off[:, :, 2 * connect_idx + 1]
-    X, Y = np.meshgrid(np.arange(U.shape[1]), np.arange(U.shape[0]))  # start point
+    with canvas() as ax:
+        ax.imshow(image)
+        ax.imshow(hmp[:, :, joint_f], alpha=0.5)
+        ax.set_title(f'response of joint {joint_f}')
+
+    with canvas() as ax:
+        ax.imshow(image)
+        ax.imshow(hmp[:, :, joint_t], alpha=0.5)
+        ax.set_title(f'response of joint {joint_t}')
+
+    # draw arrows
+    U = off[:, :, 2 * connect_idx]  # offset vector: x
+    V = off[:, :, 2 * connect_idx + 1]  # offset vector: y
+    X, Y = np.meshgrid(np.arange(U.shape[1]), np.arange(U.shape[0]))  # start points
     M = np.zeros(U.shape, dtype='bool')
     M[hmp[:, :, joint_f] < thre] = True  # filter out vectors with those low response
-    U = ma.masked_array(U, mask=M)  # 将满足条件的M位置的数据掩盖掉
+    U = ma.masked_array(U, mask=M)  # mask out
     V = ma.masked_array(V, mask=M)
-    plt.figure()
-    plt.imshow(image, alpha=.5)
-    Q = plt.quiver(X[::s, ::s], Y[::s, ::s], U[::s, ::s], V[::s, ::s],
-                   angles='xy', scale_units='xy', scale=1, color='r',
-                   alpha=None, headaxislength=4, width=0.001)
-    plt.show()
+    with canvas() as ax:
+        ax.imshow(image)  # , alpha=.5
+        ax.quiver(X[::s, ::s], Y[::s, ::s], U[::s, ::s], V[::s, ::s],
+                  angles='xy', scale_units='xy', scale=1, color='r',
+                  alpha=None, headaxislength=10, width=0.001)
+        ax.set_title(f'limb {connect_idx}: connection offset from {joint_f} to {joint_t}')
 
 
-# 上下文管理也可以通过编写__enter__和__exit__实现，但仍然很繁琐，因此Python的标准库contextlib提供了更简单的写法
 @contextmanager
 def canvas(fig_file=None, show=True, dpi=200, **kwargs):
     if 'figsize' not in kwargs:
-        # kwargs['figsize'] = (15, 8)
-        kwargs['figsize'] = (10, 6)
+        # kwargs['figsize'] = (10, 6)
+        kwargs['figsize'] = (6, 5)
     fig, ax = plt.subplots(**kwargs)
 
     yield ax
 
     fig.set_tight_layout(True)
     if fig_file:
-        fig.savefig(fig_file, dpi=dpi)  # , bbox_inches='tight')
+        fig.savefig(fig_file, dpi=dpi)  # , bbox_inches='tight'）
+
     if show:
-        plt.show()
+        plt.show()  # block=False #this creates an empty frozen window.
     plt.close(fig)
 
 
@@ -174,7 +180,7 @@ class KeypointPainter(object):
             v_highlight = v[self.highlight]
             ax.plot(x[self.highlight][v_highlight > 0],
                     y[self.highlight][v_highlight > 0],
-                    'o', markersize=self.markersize*2, markeredgewidth=2,
+                    'o', markersize=self.markersize * 2, markeredgewidth=2,
                     markerfacecolor=color, markeredgecolor=color)
 
     @staticmethod
@@ -246,7 +252,6 @@ class KeypointPainter(object):
             if texts is not None:
                 self._draw_text(ax, x, y, v, texts[i], color)
 
-
     def annotations(self, ax, annotations, *,
                     color=None, colors=None, texts=None):
         if annotations is None:
@@ -292,7 +297,7 @@ class KeypointPainter(object):
     def _draw_decoding_order(ax, decoding_order):
         for step_i, (jsi, jti, jsxyv, jtxyv) in enumerate(decoding_order):
             ax.plot([jsxyv[0], jtxyv[0]], [jsxyv[1], jtxyv[1]], '--', color='black')
-            ax.text(0.5 * (jsxyv[0] + jtxyv[0]), 0.5 * (jsxyv[1] +jtxyv[1]),
+            ax.text(0.5 * (jsxyv[0] + jtxyv[0]), 0.5 * (jsxyv[1] + jtxyv[1]),
                     '{}: {} -> {}'.format(step_i, jsi, jti), fontsize=8,
                     color='white', bbox={'facecolor': 'black', 'alpha': 0.5, 'linewidth': 0})
 

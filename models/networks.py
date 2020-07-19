@@ -9,8 +9,8 @@ from models import Hourglass104, Hourglass4Stage
 LOG = logging.getLogger(__name__)
 
 
-def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
-               resume_optimizer=True, optimizer2cuda=True):
+def load_model(model, ckpt_path, *, optimizer=None, drop_layers=True,
+               resume_optimizer=True, optimizer2cuda=True, load_amp=False):
     """
     Load pre-trained model and optimizer checkpoint.
 
@@ -21,6 +21,8 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
         drop_layers (bool): drop pre-trained params of the output layers, etc 
         resume_optimizer: 
         optimizer2cuda (bool): move optimizer statues to cuda
+        load_amp (bool): load the amp state including loss_scalers
+            and their corresponding unskipped steps
     """
 
     start_epoch = 0
@@ -30,7 +32,8 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
         print("############# No pre-trained parameters are loaded! #############\n"
               "######## Please make sure you initialize the model randomly! #####")
         # return without loading
-        return model, optimizer, start_epoch, start_loss
+        load_amp = False
+        return model, optimizer, start_epoch, start_loss, load_amp
 
     checkpoint = torch.load(ckpt_path, map_location=torch.device('cpu'))
     LOG.info('Loading pre-trained model %s, checkpoint at epoch %d', ckpt_path,
@@ -38,6 +41,14 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
     start_epoch = checkpoint['epoch'] + 1
     start_loss = checkpoint['train_loss']
     state_dict_ = checkpoint['model_state_dict']  # type: dict
+    if load_amp and 'amp' in checkpoint.keys():
+        LOG.info('Found saved amp state including loss_scalers and their corresponding '
+                 'unskipped steps from checkpoint %s at epoch %d', ckpt_path, start_epoch)
+        load_amp = checkpoint['amp']
+    else:
+        print(f'No OLD amp state is detected from current checkpoint {ckpt_path} '
+              f'or you do not load amp state')
+        load_amp = False
 
     from collections import OrderedDict
     state_dict = OrderedDict()  # loaded pre-trained model weight
@@ -91,7 +102,7 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
             # In the training process, we need cuda version of state tensors,
             # so we have to convert them to gpu.
             if torch.cuda.is_available() and optimizer2cuda:
-                LOG.debug('Remove the optimizer states into GPU.')
+                LOG.debug('Move the optimizer states into GPU.')
                 for state in optimizer.state.values():
                     for k, v in state.items():
                         if torch.is_tensor(v):
@@ -104,10 +115,10 @@ def load_model(model, ckpt_path, optimizer=None, drop_layers=True,
             print('Optimizer {} is NOT resumed, although the checkpoint exists.'.format(optimizer.__class__.__name__))
         else:
             print('Optimizer is {}.'.format(optimizer))
-    return model, optimizer, start_epoch, start_loss
+    return model, optimizer, start_epoch, start_loss, load_amp
 
 
-def save_model(path, epoch, train_loss, model, optimizer=None):
+def save_model(path, epoch, train_loss, model, optimizer=None, amp_state=None):
     from apex.parallel import DistributedDataParallel
     if isinstance(model, (torch.nn.DataParallel, DistributedDataParallel)):
         state_dict = model.module.state_dict()  # remove prefix 'module.'
@@ -118,9 +129,12 @@ def save_model(path, epoch, train_loss, model, optimizer=None):
     data = {'epoch': epoch,
             'train_loss': train_loss,
             'model_state_dict': state_dict}
-    if not (optimizer is None):
+    if optimizer is not None:
         print(f'Saving {optimizer.__class__.__name__} state dict...')
         data['optimizer_state_dict'] = optimizer.state_dict()
+    if amp_state is not None:
+        print(f'Apex is used, saving all loss_scalers and their corresponding unskipped steps...')
+        data['amp'] = amp_state
     torch.save(data, path)
     print(f'Checkpoint has been saved at {path}')
 
@@ -131,7 +145,8 @@ def initialize_weights(model):
     Args:
         model (nn.Module): input Pytorch model
 
-    Returns: initialized model
+    Returns:
+        initialized model
 
     """
     # trick: obtain the class name of this current instance
@@ -153,11 +168,11 @@ def initialize_weights(model):
     return model
 
 
-class NetworkWrap(torch.nn.Module):
+class NetworkWrapper(torch.nn.Module):
     """Wrap the basenet and headnets into a single module."""
 
     def __init__(self, basenet, headnets):
-        super(NetworkWrap, self).__init__()
+        super(NetworkWrapper, self).__init__()
         self.basenet = basenet
         # Notice!  subnets in list or dict must be warped
         # by ModuleList to register trainable params
@@ -179,7 +194,7 @@ def basenet_factory(basenet_name):
         basenet_name:
 
     Returns:
-    tuple: BaseNetwork, n_stacks, stride, oup_dim
+        tuple: BaseNetwork, n_stacks, stride, oup_dim
 
     """
     assert basenet_name in ['hourglass104', 'hourglass4stage'], \

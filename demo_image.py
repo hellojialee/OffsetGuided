@@ -17,6 +17,7 @@ import encoder
 import models
 import logs
 from visualization.show import draw_limb_offset
+import decoder
 
 try:
     from apex.parallel import DistributedDataParallel as DDP
@@ -52,14 +53,16 @@ def demo_cli():
                         help='folder path checkpoint storage of the whole pose estimation model')
     parser.add_argument('--show-limb-idx', default=None, type=int, metavar='N',
                         help='draw the vector of limb connection offset and connected keypoints')
+    parser.add_argument('--show-hmp-idx', default=None, type=int, metavar='N',
+                        help='show the heatmap and locations of keypoints of current type')
 
     group = parser.add_argument_group('apex configuration')
     group.add_argument("--local_rank", default=0, type=int)
     group.add_argument('--opt-level', type=str, default='O1')
     group.add_argument('--keep-batchnorm-fp32', type=str, default=None)
     group.add_argument('--loss-scale', type=str, default=None)  # '1.0'
-    group.add_argument('--channels-last', type=bool,
-                       default=False)  # fixme: channel last may lead to 22% speed up
+    group.add_argument('--channels-last', default=False, action='store_true',
+                       help='channel last may lead to 22% speed up')  # fixme: channel last may lead to 22% speed up
     group.add_argument('--print-freq', '-f', default=10, type=int, metavar='N',
                        help='print frequency (default: 10)')
 
@@ -114,10 +117,9 @@ def main():
     model.cuda()
 
     if args.resume:
-        model, _, start_epoch, best_loss = models.networks.load_model(
+        model, _, start_epoch, best_loss, _ = models.networks.load_model(
             model, args.checkpoint_whole, optimizer=None, resume_optimizer=False,
-            drop_layers=False)
-
+            drop_layers=False, load_amp=False)
     # Initialize Amp.  Amp accepts either values or strings for the optional override arguments,
     # for convenient interpretation with argparse.
     model = amp.initialize(model,
@@ -141,10 +143,10 @@ def main():
 
     # ############################# Train and Validate #############################
     for epoch in range(start_epoch, start_epoch + args.epochs):
-        test(val_loader, model, lossfuns, epoch, show_limb_idx=args.show_limb_idx)
+        test(train_loader, model, lossfuns, epoch, show_limb_idx=args.show_limb_idx, show_hmp_idx=args.show_hmp_idx)
 
 
-def test(val_loader, model, criterion, epoch, show_limb_idx=None, s=5):
+def test(val_loader, model, criterion, epoch, show_limb_idx=None, show_hmp_idx=None):
     """
     Args:
         val_loader:
@@ -152,9 +154,8 @@ def test(val_loader, model, criterion, epoch, show_limb_idx=None, s=5):
         criterion:
         epoch:
         show_limb_idx (int): show the limb connection offset vector with this index
-        s (int): control the sparsity of the vector arrows
     """
-    print('\n ############################# Test phase, Epoch: {} #############################'.format(epoch))
+    print('\n ======================= Test phase, Epoch: {} ======================='.format(epoch))
     model.eval()
     # if args.distributed:
     #     val_sampler.set_epoch(epoch)
@@ -186,8 +187,39 @@ def test(val_loader, model, criterion, epoch, show_limb_idx=None, s=5):
                             for l in multi_losses],
             'loss': round(to_python_float(loss.detach()), 6),
         })
+        if isinstance(show_hmp_idx, int):
+            hmps = outputs[0][0][1]
+            offs = outputs[1][0][1]
 
-        if show_limb_idx:
+            filter_map = decoder.hmp_NMS(hmps, thre=0.1)
+            hmp = filter_map[0, show_hmp_idx].cpu().numpy()
+            plt.imshow(hmp)
+            plt.show()
+
+            dets = decoder.topK_channel(filter_map, K=50)
+
+            dets = [det.cpu().numpy() for det in dets]
+            # todo: keymap改成根据image进行缩放
+            keymap = np.zeros((args.square_length // args.strides[0],
+                               args.square_length // args.strides[0]))
+            for yy, xx in zip(dets[2][0, show_hmp_idx], dets[3][0, show_hmp_idx]):
+                keymap[yy, xx] = 1
+            plt.imshow(keymap)
+            plt.show()
+
+            gen = decoder.GreedyGroup(hmps, offs, 4, 1,
+                                      encoder.OffsetMaps.skeleton,
+                                      topk=50, threshold=0.1)
+            t1 = time.time()
+            limbs = gen.generate_limbs()
+            t2 = time.time() - t1
+
+            t3 = time.time()
+            limbs = gen.naive_generate_limbs()
+            t4 = time.time() - t1
+            t = 2
+
+        if isinstance(show_limb_idx, int):
             hmps = outputs[0][0][1].cpu().numpy()
             offs = outputs[1][0][1].cpu().numpy()
             offs[np.isinf(offs)] = 0
@@ -196,8 +228,9 @@ def test(val_loader, model, criterion, epoch, show_limb_idx=None, s=5):
             image = images.cpu().numpy()[0, ...].transpose((1, 2, 0))  # the first image
 
             skeleton = encoder.OffsetMaps.skeleton
-
-            draw_limb_offset(hmp, image, off, s, show_limb_idx, skeleton)
+            # first ,we should roughly rescale the image into the range of [0, 1]
+            image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
+            draw_limb_offset(hmp, image, off, show_limb_idx, skeleton, s=7, thre=0.1)
 
         if batch_idx % args.print_freq == 0:
             reduced_loss = loss.data

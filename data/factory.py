@@ -168,14 +168,14 @@ if __name__ == '__main__':  # for debug
             # mask_miss[0] from heatmap.py is actually the same as mask_miss[1] from offset.py
             image = image.numpy()
             mask_miss = annos[0][-1].numpy().astype(np.float32)  # bool -> float
-            bg_hmp = annos[0][1].numpy()
+            hmp = annos[0][0].numpy()
             offset = annos[1][0].numpy()
             offset[np.isinf(offset)] = 0
 
             # # show the generated ground truth
             if show_image:
                 image = image.transpose((1, 2, 0))
-                show_labels = cv2.resize(bg_hmp.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
+                show_labels = cv2.resize(hmp.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
                 offset = cv2.resize(offset.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
                 mask_miss = np.repeat(mask_miss.transpose((1, 2, 0)), 3, axis=2)
                 mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)

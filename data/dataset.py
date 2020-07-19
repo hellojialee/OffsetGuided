@@ -52,6 +52,7 @@ class CocoKeypoints(torch.utils.data.Dataset):
             self.filter_for_keypoint_annotations()
         if n_images:
             self.ids = self.ids[:n_images]
+        print(f'Path to annotation file: {annFile}')
         print('Evaluation Image Numbers: {}'.format(len(self.ids)))
 
         if shuffle:

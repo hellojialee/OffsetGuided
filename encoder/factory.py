@@ -104,7 +104,7 @@ def factory_head(head_name, square_length, stride):
         else:
             raise Exception('unknown skeleton type of head')
 
-        LOG.info('selected encoder: Offset for %s', head_name)
+        LOG.info('selected encoder: Offset for %s with %d limb connections', head_name, len(OffsetMaps.skeleton))
         return OffsetMaps(square_length, stride)
         # 构造并返回Paf，用于生成ground truth paf
     raise Exception('unknown head to create an encoder: {}'.format(head_name))

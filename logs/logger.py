@@ -6,6 +6,12 @@ import logging
 LOG = logging.getLogger(__name__)
 
 
+def boolean_string(s):
+    if s not in {'False', 'True'}:
+        raise ValueError('Not a valid boolean string')
+    return s == 'True'
+
+
 def cli(parser):
     group = parser.add_argument_group('logging')
     group.add_argument('--logging-output', default=None, type=str)

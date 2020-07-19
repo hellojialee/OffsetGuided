@@ -4,7 +4,6 @@ import re
 
 LOG = logging.getLogger(__name__)
 
-
 TAU = 0.01  # threshold between fore/background in focal L2 loss during training
 GAMMA = 1  # order of scaling factor in focal L2 loss during training
 MARGIN = 0.1  # offset length below this value will not be punished
@@ -88,25 +87,32 @@ class LossChoice(object):
         Args:
             pred: inferred offset tensor, shape=(N, C, out_h, out_w)
             gt: ground truth offset tesor, shape=(N, C, out_h, out_w)
-            logb: inferred laplace spread, shape=(N, C/2, out_h, out_w)
-            mask_miss: shape=(1, out_h, out_w)
+            logb: inferred laplace spread logb, shape=(N, C//2, out_h, out_w)
+            mask_miss: shape=(N, 1, out_h, out_w)
         """
-        # spread logb: shape=(N, C//2, out_h, out_w)
+        # delta = (pred - gt)
+        # offset_x = delta[:, ::2, None, :, :]  # (N, C//2, 1， out_h, out_w)
+        # offset_y = delta[:, 1::2, None, :, :]  # (N, C//2, 1， out_h, out_w)
+        #
+        # norm = torch.cat(
+        #     (offset_x, offset_y), dim=2).norm(  # (N, C//2, 2, out_h, out_w)
+        #     dim=2)  # (N, C//2, out_h, out_w)
+        #
+        # labelled_norm = norm[mask_miss.expand_as(norm)]
+        # labelled_logb = logb[mask_miss.expand_as(logb)]
+        # labelled_offset_x = offset_x.squeeze(
+        # )[mask_miss.expand_as(offset_x.squeeze())]
+        #
+        # mask = torch.isfinite(labelled_offset_x)
 
-        delta = (pred - gt)
-        offset_x = delta[:, ::2, None, :, :]  # (N, C//2, 1， out_h, out_w)
-        offset_y = delta[:, 1::2, None, :, :]  # (N, C//2, 1， out_h, out_w)
-
-        norm = torch.cat(
-            (offset_x, offset_y), dim=2).norm(
-            dim=2)  # (N, C//2, out_h, out_w)
-
+        delta = (pred - gt)  # type: torch.Tensor
+        n, c, h, w = delta.size()
+        # we must reshape 2 before -1, because the GT offset sequence x1, y1, x2, y2, ...
+        # view and norm: (N, C//2, 2, out_h, out_w) -> (N, C//2, out_h, out_w)
+        norm = delta.view((n, -1, 2, h, w)).norm(dim=2)
         labelled_norm = norm[mask_miss.expand_as(norm)]
         labelled_logb = logb[mask_miss.expand_as(logb)]
-        labelled_offset_x = offset_x.squeeze(
-        )[mask_miss.expand_as(offset_x.squeeze())]
-
-        mask = torch.isfinite(labelled_offset_x)
+        mask = torch.isfinite(labelled_norm)
         return laplace(labelled_norm[mask], labelled_logb[mask])
 
 
@@ -230,7 +236,7 @@ def factory_loss(head_name, n_stacks, stack_weights, hmp_loss, off_loss, s_loss,
                      'heatmap',
                      'heatmaps') or \
             re.match('hmp[s]?([0-9]+)$', head_name) is not None:
-        LOG.info('select loss net for %s head', head_name)
+        LOG.info('select %s for %s_head_net', hmp_loss.__name__, head_name)
         return HeatMapsLoss(head_name, n_stacks, stack_weights, hmp_loss)
 
     if head_name in ('omp',
@@ -238,7 +244,7 @@ def factory_loss(head_name, n_stacks, stack_weights, hmp_loss, off_loss, s_loss,
                      'offset',
                      'offsets') or \
             re.match('omp[s]?([0-9]+)$', head_name) is not None:
-        LOG.info('select loss net for %s head', head_name)
+        LOG.info('select %s and %s for %s_head_net', off_loss.__name__, s_loss.__name__, head_name)
         return OffsetMapsLoss(head_name, n_stacks, stack_weights, off_loss, s_loss, sqrt_re)
         # 构造并返回Paf，用于生成ground truth paf
     raise Exception('unknown head to create a lossnet: {}'.format(head_name))
