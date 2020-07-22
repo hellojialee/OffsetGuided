@@ -2,25 +2,31 @@
 import logging
 import time
 import torch
+import numpy as np
 from decoder import hmp_NMS, topK_channel
 
 LOG = logging.getLogger(__name__)
 
 
-# 构建factory初始化, 根据args选择skeleton = COCO_PERSON_SKELETON
-class GreedyGroup(object):
+# TODO：构建factory初始化, 根据args选择skeleton = COCO_PERSON_SKELETON
+# TODO: 如果后面有频繁的访问numpy内存操作，改成cython代码会不会更快一些？
+
+class LimbsCollect(object):
     """
+    Collect all candidate keypoints and pair them into limbs
+    on the basis of guiding offset vectors.
+
     Attributes:
         hmps_hr (Tensor): with shape (N, C, H, W)
         offs_hr (Tensor): with shape (N, L*2, H, W)
         hmp_s (int): stride of coordinate Unit of heatmaps with respect to that of input image
-        off_s (int): stride of coordinate Unit of offetmaps with respect to that of original input
+        off_s (int): stride of coordinate Unit of offetmaps with respect to that of input image
         skeleton (list): limb sequence, i.e., keypoint connections in the human skeleton
-        threshold (float): connections below this value are removed
-        topk (int): select the top K responses on each heatmaps
+        topk (int): select the top K responses on each heatmaps,
+            thus top K limb connections are generated
     """
 
-    def __init__(self, hmps_hr, offs_hr, hmp_s, off_s, skeleton, threshold=0.01, topk=40):
+    def __init__(self, hmps_hr, offs_hr, hmp_s, off_s, skeleton, topk=40):
         self.hmps_hr = hmps_hr  # type: torch.Tensor
         self.offs_hr = offs_hr  # type: torch.Tensor
         assert hmps_hr.shape[-2:] == offs_hr.shape[-2:], 'spatial resolution should be equal'
@@ -35,35 +41,32 @@ class GreedyGroup(object):
         LOG.info('unify the heatmap coordinate unit and offset coordinate'
                  ' unit using rescale factor %.3f', self.resize_factor)
         self.skeleton = skeleton
-        self.threshold = threshold
         self.K = topk
+        self.jtypes_f, self.jtypes_t = self.pack_jtypes()
 
-    def candidates(self):
-        """Candidate keypoints on heatmaps"""
-        filtered_hmps = hmp_NMS(self.hmps_hr)
+    @staticmethod
+    def joint_dets(hmps, k):
+        """Select Top k candidate keypoints in heatmaps"""
+        filtered_hmps = hmp_NMS(hmps)
         # shape of hm_score, hm_inds = [batch, 17, topk]
-        return topK_channel(filtered_hmps, K=self.K)
+        dets = topK_channel(filtered_hmps, K=k)
+        return dets
 
-    def generate_limbs(self):
+    def generate_limbs(self):  # todo: convert to fp 16 computation
+        """Generate all limbs between adjacent keypoints in the human skeleton tree"""
         # shape of each item of dets: (N, 17, K), in which K equals self.topk
-        dets = self.candidates()
+        dets = self.joint_dets(self.hmps_hr, self.K)
 
         n, c, h, w = self.hmps_hr.shape
         n_limbs = len(self.skeleton)  # L
-        jtypes_f, jtypes_t = [], []
-        for i, (j_f, j_t) in enumerate(self.skeleton):
-            jtypes_f.append(j_f)
-            jtypes_t.append(j_t)
+        LOG.debug('%d limb connections are defined', n_limbs)
 
-        det_f = [temp[:, jtypes_f, :].unsqueeze(-1) for temp in dets]
-        kps_scores_f, kps_inds_f, kps_ys_f, kps_xs_f = det_f  # 4 * (N, L, K, 1)
-        kps_xys_f = torch.cat((kps_xs_f, kps_ys_f), dim=-1)  # (N, L, K, 2)
+        # 2 * (N, L, K, 1)，and (N, L, K, 2)
+        kps_inds_f, kps_scores_f, kps_xys_f = self._channel_dets(dets, self.jtypes_f)
 
-        det_t = [temp[:, jtypes_t, :].unsqueeze(-1) for temp in dets]
-        # 4 * (N, L, K, 1), can also be (N, L, M, 1)
-        kps_scores_t, kps_inds_t, kps_ys_t, kps_xs_t = det_t
-        # (N, L, K, 2), can also be (N, L, M, 2)
-        kps_xys_t = torch.cat((kps_xs_t, kps_ys_t), dim=-1)
+        # 2 * (N, L, K, 1), can also be (N, L, M, 1)
+        # and (N, L, K, 2), can also be (N, L, M, 2)
+        kps_inds_t, kps_scores_t, kps_xys_t = self._channel_dets(dets, self.jtypes_t)
 
         # ############### get offset vectors of all limb connections ###############
         offs_i = self.offs_hr.view((n, -1, 2, h, w))  # (N, L, 2, H, W)
@@ -90,30 +93,45 @@ class GreedyGroup(object):
         matched_kps_inds_t = kps_inds_t.gather(2, min_ind)  # (N, L, K, 1)
 
         # ###############  convert to global indexes across heatmap channels ###############
-        channel_page_f = torch.tensor(jtypes_f). \
+        channel_page_f = torch.tensor(self.jtypes_f, device=kps_inds_f.device). \
             reshape((1, 1, 1, n_limbs)).permute((0, 3, 1, 2))  # (1, L, 1, 1)
-        channel_page_t = torch.tensor(jtypes_t). \
+        channel_page_t = torch.tensor(self.jtypes_t, device=matched_kps_inds_t.device). \
             reshape((1, 1, 1, n_limbs)).permute((0, 3, 1, 2))
 
-        kps_inds_f = kps_inds_f + channel_page_f.to(kps_inds_f.device) * h * w  # (N, L, K, 1)
+        kps_inds_f = kps_inds_f + channel_page_f * (h * w)  # (N, L, K, 1)
         matched_kps_inds_t = matched_kps_inds_t + \
-                             channel_page_t.to(matched_kps_inds_t.device) * h * w  # (N, L, K, 1)
+                             channel_page_t * (h * w)  # (N, L, K, 1)
 
-        t1 = kps_guid_t.cpu().numpy()
-        t2 = kps_xys_t.cpu().numpy()
-        t3 = kps_xys_f.cpu().numpy()
-        y1 = kps_scores_t.cpu().numpy()
-        tt1 = min_dist.cpu().numpy()
-        tt2 = min_ind.cpu().numpy()
-        t33 = matched_kps_inds_t.cpu().numpy()
-        t22 = matched_kps_score_t.cpu().numpy()
-        t11 = matched_kps_xys_t.cpu().numpy()
+        len_limbs = (kps_xys_f.float() - matched_kps_xys_t.float()).norm(dim=-1, keepdim=True)  # (N, L, K, 1)
 
-        return min_dist, kps_scores_f,
+        limbs = torch.cat((kps_xys_f.float(),
+                           kps_scores_f,
+                           kps_inds_f.float(),
+                           matched_kps_xys_t.float(),
+                           matched_kps_score_t,
+                           matched_kps_inds_t.float(),
+                           min_dist,
+                           len_limbs), -1)
+
+        # shape=(N, L, K, 10), in the last dim: [x1, y1, v1, ind1, x2, y2, v2, ind2, len_delta, len_limb]
+        return limbs.cpu().numpy()
+
+    def pack_jtypes(self):
+        jtypes_f, jtypes_t = [], []
+        for i, (j_f, j_t) in enumerate(self.skeleton):
+            jtypes_f.append(j_f)
+            jtypes_t.append(j_t)
+        return jtypes_f, jtypes_t
+
+    def _channel_dets(self, dets, jtypes):
+        det_f = [temp[:, jtypes, :].unsqueeze(-1) for temp in dets]
+        kps_scores_f, kps_inds_f, kps_ys_f, kps_xs_f = det_f
+        kps_xys_f = torch.cat((kps_xs_f, kps_ys_f), dim=-1)
+        return kps_inds_f, kps_scores_f, kps_xys_f
 
     def naive_generate_limbs(self):
         # shape of each item of dets: (N, 17, K), in which K equals self.topk
-        dets = self.candidates()
+        dets = self.joint_dets()
         n, c, h, w = self.hmps_hr.shape
         n_limb = len(self.skeleton)
 
@@ -149,7 +167,32 @@ class GreedyGroup(object):
             matched_kps_xys_t = kps_xys_t.gather(1, min_ind.expand(n, self.K, 2))  # (N, K, 2)
 
             # ###############  convert to global indexes across heatmap channels ###############
-            matched_kps_inds = kps_inds_t.gather(1, min_ind) + jtype_t * h * w  # (N, K, 1)
+            matched_kps_inds_t = kps_inds_t.gather(1, min_ind) + jtype_t * h * w  # (N, K, 1)
             kps_inds_f = kps_inds_f + jtype_f * h * w  # (N, K, 1)
 
+            # t1 = kps_guid_t.cpu().numpy()
+            # t2 = kps_xys_t.cpu().numpy()
+            # t3 = kps_xys_f.cpu().numpy()
+            # y1 = kps_score_f.cpu().numpy()
+            # tt1 = min_dist.cpu().numpy()
+            # tt2 = min_ind.cpu().numpy()
+            # t33 = matched_kps_inds_t.cpu().numpy()
+            # t22 = matched_kps_score_t.cpu().numpy()
+            # t11 = matched_kps_xys_t.cpu().numpy()
             pass
+
+
+class GreedyGroup(object):
+    """
+    Greedily group the limbs into individual human skeletons in one image.
+    """
+    def __init__(self, limbs, scsmp, skeleton, threshold):
+        self.limbs = limbs
+        self.scsmp = scsmp
+        self.skeleton = skeleton
+        self.threshold = threshold
+
+    def grop_skeletons(self, force_complete=False):
+        # last number in each row is the total parts number of that person
+        # the second last number in each row is the score of the overall configuration
+        subset = -1 * np.ones((0, 20, 2))

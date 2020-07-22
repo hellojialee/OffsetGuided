@@ -1,2 +1,2 @@
-from .heatmap import hmp_NMS, topK_channel, _gather_feat, _transpose_and_gather_feat
-from .group import GreedyGroup
+from .heatmap import hmp_NMS, topK_channel
+from .group import LimbsCollect

@@ -28,11 +28,11 @@ class AugParams:
     """
     An example of augmentation params.
     """
-    flip_prob = 0.5
-    max_rotate = 40
-    min_scale = 0.7
-    max_scale = 1.3
-    max_translate = 50
+    flip_prob = 0
+    max_rotate = 0
+    min_scale = 1.
+    max_scale = 1.
+    max_translate = 0.
 
 
 class WarpAffineTransforms(Preprocess):

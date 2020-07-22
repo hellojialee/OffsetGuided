@@ -55,6 +55,8 @@ def demo_cli():
                         help='draw the vector of limb connection offset and connected keypoints')
     parser.add_argument('--show-hmp-idx', default=None, type=int, metavar='N',
                         help='show the heatmap and locations of keypoints of current type')
+    parser.add_argument('--show-all-limbs', action='store_true', default=False,
+                        help='show all candidate limb connecitons')
 
     group = parser.add_argument_group('apex configuration')
     group.add_argument("--local_rank", default=0, type=int)
@@ -92,7 +94,8 @@ def main():
 
     preprocess_transformations = [
         transforms.NormalizeAnnotations(),
-        transforms.WarpAffineTransforms(args.square_length, aug_params=args,
+        transforms.WarpAffineTransforms(args.square_length,
+                                        aug_params=transforms.AugParams(),
                                         debug_show=args.debug_affine_show),
         # transforms.RandomApply(transforms.AnnotationJitter(), 0.1),
     ]
@@ -143,17 +146,16 @@ def main():
 
     # ############################# Train and Validate #############################
     for epoch in range(start_epoch, start_epoch + args.epochs):
-        test(train_loader, model, lossfuns, epoch, show_limb_idx=args.show_limb_idx, show_hmp_idx=args.show_hmp_idx)
+        test(train_loader, model, lossfuns, epoch)
 
 
-def test(val_loader, model, criterion, epoch, show_limb_idx=None, show_hmp_idx=None):
+def test(val_loader, model, criterion, epoch):
     """
     Args:
         val_loader:
         model:
         criterion:
         epoch:
-        show_limb_idx (int): show the limb connection offset vector with this index
     """
     print('\n ======================= Test phase, Epoch: {} ======================='.format(epoch))
     model.eval()
@@ -187,12 +189,16 @@ def test(val_loader, model, criterion, epoch, show_limb_idx=None, show_hmp_idx=N
                             for l in multi_losses],
             'loss': round(to_python_float(loss.detach()), 6),
         })
-        if isinstance(show_hmp_idx, int):
+        if isinstance(args.show_hmp_idx, int):
             hmps = outputs[0][0][1]
             offs = outputs[1][0][1]
 
+            sizeHW = (args.square_length, args.square_length)
+            hmps = torch.nn.functional.interpolate(hmps, size=sizeHW, mode="bicubic")
+            offs = torch.nn.functional.interpolate(offs, size=sizeHW, mode="bicubic")
+
             filter_map = decoder.hmp_NMS(hmps, thre=0.1)
-            hmp = filter_map[0, show_hmp_idx].cpu().numpy()
+            hmp = filter_map[0, args.show_hmp_idx].cpu().numpy()
             plt.imshow(hmp)
             plt.show()
 
@@ -200,26 +206,52 @@ def test(val_loader, model, criterion, epoch, show_limb_idx=None, show_hmp_idx=N
 
             dets = [det.cpu().numpy() for det in dets]
             # todo: keymap改成根据image进行缩放
-            keymap = np.zeros((args.square_length // args.strides[0],
-                               args.square_length // args.strides[0]))
-            for yy, xx in zip(dets[2][0, show_hmp_idx], dets[3][0, show_hmp_idx]):
+            keymap = np.zeros((args.square_length,
+                               args.square_length))
+            for yy, xx in zip(dets[2][0, args.show_hmp_idx], dets[3][0, args.show_hmp_idx]):
                 keymap[yy, xx] = 1
             plt.imshow(keymap)
             plt.show()
 
-            gen = decoder.GreedyGroup(hmps, offs, 4, 1,
-                                      encoder.OffsetMaps.skeleton,
-                                      topk=50, threshold=0.1)
+        if args.show_all_limbs:
+            hmps = outputs[0][0][1]
+            offs = outputs[1][0][1]
+            sizeHW = (args.square_length, args.square_length)
+            torch.cuda.synchronize()  # 需要吗？
+            t0 = time.time()
+            hmps = torch.nn.functional.interpolate(hmps, size=sizeHW, mode="bicubic")
+            offs = torch.nn.functional.interpolate(offs, size=sizeHW, mode="bicubic")
+            torch.cuda.synchronize()  # 需要吗？
             t1 = time.time()
+            tt1 = t1 - t0
+            LOG.info('interpolation tims: %.6f', tt1)
+            gen = decoder.LimbsCollect(hmps, offs, 1, 1,
+                                       encoder.OffsetMaps.skeleton,
+                                       topk=48)
+            t2 = time.time()
+
             limbs = gen.generate_limbs()
-            t2 = time.time() - t1
+            torch.cuda.synchronize()  # 需要吗？
+            tt2 = time.time() - t2
+            LOG.info('keypoint pairing time: %.6f', tt2)
+            t2 = time.time() - t0
+            LOG.info('keypoint detection and pairing time: %.6f', t2)
 
-            t3 = time.time()
-            limbs = gen.naive_generate_limbs()
-            t4 = time.time() - t1
-            t = 2
+            limb = limbs[0]
+            for ltype_i, connects in enumerate(limb):
+                xyv1 = connects[:, 0:3]
+                xyv2 = connects[:, 4:7]
+                len_delta = connects[:, -2]
+                for i in range(len(xyv1)):
+                    if xyv1[i, 2] > 0.1 and xyv2[i, 2] > 0.1 and len_delta[i] <= 8:
+                        x1, y1 = xyv1[i, :2].tolist()
+                        x2, y2 = xyv2[i, :2].tolist()
+                        plt.plot([x1, x2], [-y1, -y2], color='r')
+                        plt.xlim((0, args.square_length))
+                        plt.ylim((-args.square_length, 0))
+            plt.show()
 
-        if isinstance(show_limb_idx, int):
+        if isinstance(args.show_limb_idx, int):
             hmps = outputs[0][0][1].cpu().numpy()
             offs = outputs[1][0][1].cpu().numpy()
             offs[np.isinf(offs)] = 0
@@ -230,7 +262,7 @@ def test(val_loader, model, criterion, epoch, show_limb_idx=None, show_hmp_idx=N
             skeleton = encoder.OffsetMaps.skeleton
             # first ,we should roughly rescale the image into the range of [0, 1]
             image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
-            draw_limb_offset(hmp, image, off, show_limb_idx, skeleton, s=7, thre=0.1)
+            draw_limb_offset(hmp, image, off, args.show_limb_idx, skeleton, s=7, thre=0.1)
 
         if batch_idx % args.print_freq == 0:
             reduced_loss = loss.data
