@@ -197,7 +197,7 @@ def test(val_loader, model, criterion, epoch):
             hmps = torch.nn.functional.interpolate(hmps, size=sizeHW, mode="bicubic")
             offs = torch.nn.functional.interpolate(offs, size=sizeHW, mode="bicubic")
 
-            filter_map = decoder.hmp_NMS(hmps, thre=0.1)
+            filter_map = decoder.hmp_NMS(hmps)
             hmp = filter_map[0, args.show_hmp_idx].cpu().numpy()
             plt.imshow(hmp)
             plt.show()
@@ -226,8 +226,7 @@ def test(val_loader, model, criterion, epoch):
             tt1 = t1 - t0
             LOG.info('interpolation tims: %.6f', tt1)
             gen = decoder.LimbsCollect(hmps, offs, 1, 1,
-                                       encoder.OffsetMaps.skeleton,
-                                       topk=48)
+                                       topk=48, thre_hmp=0.08)
             t2 = time.time()
 
             limbs = gen.generate_limbs()
@@ -240,16 +239,22 @@ def test(val_loader, model, criterion, epoch):
             limb = limbs[0]
             for ltype_i, connects in enumerate(limb):
                 xyv1 = connects[:, 0:3]
-                xyv2 = connects[:, 4:7]
+                xyv2 = connects[:, 3:6]
                 len_delta = connects[:, -2]
                 for i in range(len(xyv1)):
-                    if xyv1[i, 2] > 0.1 and xyv2[i, 2] > 0.1 and len_delta[i] <= 8:
+                    if xyv1[i, 0] > 0 and xyv2[i, 0] > 0 and len_delta[i] <= 10:
                         x1, y1 = xyv1[i, :2].tolist()
                         x2, y2 = xyv2[i, :2].tolist()
                         plt.plot([x1, x2], [-y1, -y2], color='r')
+                        plt.scatter([x1, x2], [-y1, -y2], color='g')
                         plt.xlim((0, args.square_length))
                         plt.ylim((-args.square_length, 0))
             plt.show()
+
+            assemble = decoder.GreedyGroup(limb, 0.1)
+            t0 = time.time()
+            single_pose = assemble.group_skeletons()
+            t1 = time.time() - t0
 
         if isinstance(args.show_limb_idx, int):
             hmps = outputs[0][0][1].cpu().numpy()

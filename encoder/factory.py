@@ -2,8 +2,11 @@ import re
 import logging
 from .heatmap import HeatMaps
 from .offset import OffsetMaps
-from config.coco_data import (COCO_PERSON_SKELETON, COCO_PERSON_WITH_REDUNDANT_SKELETON,
-                              REDUNDANT_CONNECTIONS, KINEMATIC_TREE_SKELETON)
+from config.coco_data import (COCO_KEYPOINTS,
+                              COCO_PERSON_SKELETON,
+                              COCO_PERSON_WITH_REDUNDANT_SKELETON,
+                              REDUNDANT_CONNECTIONS,
+                              KINEMATIC_TREE_SKELETON)
 
 LOG = logging.getLogger(__name__)
 
@@ -79,6 +82,7 @@ def factory_head(head_name, square_length, stride):
 
         else:
             n_keypoints = 17
+            keypoints = COCO_KEYPOINTS
 
         LOG.info('selected encoder: Heatmap for %s with %d keypoints', head_name, n_keypoints)
         HeatMaps.n_keypoints = n_keypoints

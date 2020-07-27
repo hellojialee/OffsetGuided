@@ -3,6 +3,7 @@ import cv2
 import math
 import logging
 import torch
+from config.coco_data import COCO_KEYPOINTS
 
 LOG = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class HeatMaps(object):
     clip_thre = 0.01  # Gaussian distribution below this value will be set to zero
     sigma = 9  # standard deviation of Gaussian distribution
     n_keypoints = 17
+    keypoints = COCO_KEYPOINTS
     include_background = True  # background heatmap
 
     def __init__(self, input_size, stride):

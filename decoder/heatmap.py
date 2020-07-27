@@ -7,14 +7,14 @@ def normalize_hmps():
     pass
 
 
-def hmp_NMS(heat, kernel=3, thre=0.001):
+def hmp_NMS(heat, kernel=3):  # , thre=0.001
     """
     NMS on keypoint Gaussian response heatmap (score map).
     Peak responses are reserved, compress non-peak responses to zero.
     Args:
         heat (Tensor): input tensor with shape  (N, H, W, C).
         kernel:
-        thre: values below this threshold are filtered.
+        thre: values below this threshold are filtered (abandoned, we move this into group.py).
 
     Returns:
         tensor (Tensor): a float tenor with shape (N, H, W, C),
@@ -23,7 +23,7 @@ def hmp_NMS(heat, kernel=3, thre=0.001):
     pad = (kernel - 1) // 2
     pad_heat = F.pad(heat, (pad, pad, pad, pad))  # , mode='reflect'
     hmax = F.max_pool2d(pad_heat, (kernel, kernel), stride=1, padding=0)
-    keep_mask = (hmax == heat).float() * (heat >= thre).float()  # bool tensor -> float tensor
+    keep_mask = (hmax == heat).float()  # * (heat >= thre).float()  # bool tensor -> float tensor
     return heat * keep_mask
 
 
