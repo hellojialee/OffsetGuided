@@ -4,7 +4,7 @@ import time
 import random
 import torch
 import numpy as np
-from decoder import hmp_NMS, topK_channel
+from decoder import joint_dets
 from config.coco_data import (COCO_KEYPOINTS,
                               COCO_PERSON_SKELETON,
                               COCO_PERSON_WITH_REDUNDANT_SKELETON,
@@ -19,7 +19,7 @@ LOG = logging.getLogger(__name__)
 
 class LimbsCollect(object):
     """
-    Collect all candidate keypoints and pair them into limbs
+    Collect all **candidate** keypoints and pair them into limbs
     on the basis of guiding offset vectors.
 
     Attributes:
@@ -32,10 +32,11 @@ class LimbsCollect(object):
         skeleton (list): limb sequence, i.e., keypoint connections in the human skeleton
         thre_hmp (float): limb connections below this value are moved outside the image boarder
         topk (int): select the top K responses on each heatmaps
+        min_len (int): length in pixels, in case of the zero length of limb
     """
 
     def __init__(self, hmps_hr, offs_hr, hmp_s, off_s, *, scsmp=[], topk=40, thre_hmp=0.08,
-                 keypoints=COCO_KEYPOINTS, skeleton=COCO_PERSON_SKELETON):
+                 min_len=3, keypoints=COCO_KEYPOINTS, skeleton=COCO_PERSON_SKELETON):
         self.hmps_hr = hmps_hr  # type: torch.Tensor
         self.offs_hr = offs_hr  # type: torch.Tensor
         self.scsmp = scsmp  # todo: 将利用scale与offset delta大小决定imbs的取舍
@@ -57,6 +58,7 @@ class LimbsCollect(object):
         self.skeleton = skeleton
         self.K = topk
         self.thre_hmp = thre_hmp
+        self.min_len = min_len
         self.jtypes_f, self.jtypes_t = self.pack_jtypes(skeleton)
 
     @staticmethod
@@ -76,18 +78,14 @@ class LimbsCollect(object):
         kps_xys[kps_scores.expand_as(kps_xys) < threshold] -= 100000
         return kps_inds, kps_scores, kps_xys
 
-    @staticmethod
-    def joint_dets(hmps, k):  # todo: 提出来变成单独的函数
-        """Select Top k candidate keypoints in heatmaps"""
-        filtered_hmps = hmp_NMS(hmps)
-        # shape of hm_score, hm_inds, topk_ys, topk_xs = [batch, 17, topk]
-        dets = topK_channel(filtered_hmps, K=k)
-        return dets
+    def generate_limbs(self):
+        """
+        Generate all limbs between adjacent keypoints in the human skeleton tree
 
-    def generate_limbs(self):  # todo: convert to fp 16 computation
-        """Generate all limbs between adjacent keypoints in the human skeleton tree"""
+        Returns: a Tensor containing all candidate limbs information of a batch of images
+        """
         # shape of each item of dets: (N, 17, K), in which K equals self.topk
-        dets = self.joint_dets(self.hmps_hr, self.K)
+        dets = joint_dets(self.hmps_hr, self.K)
 
         n, c, h, w = self.hmps_hr.shape
         n_limbs = len(self.skeleton)  # L
@@ -148,9 +146,10 @@ class LimbsCollect(object):
         kps_inds_f = kps_inds_f + channel_page_f * (h * w)  # (N, L, K, 1)
         matched_kps_inds_t = matched_kps_inds_t + channel_page_t * (h * w)  # (N, L, K, 1)
 
-        len_limbs = (kps_xys_f.float() - matched_kps_xys_t.float()
-                     ).norm(dim=-1, keepdim=True)  # (N, L, K, 1)
+        len_limbs = torch.clamp((kps_xys_f.float() - matched_kps_xys_t.float()
+                                 ).norm(dim=-1, keepdim=True), min=self.min_len)  # (N, L, K, 1)
 
+        limb_scores = kps_scores_f * matched_kps_score_t * torch.exp(-min_dist / len_limbs)
         limbs = torch.cat((kps_xys_f.float(),
                            kps_scores_f,
                            matched_kps_xys_t.float(),
@@ -158,22 +157,24 @@ class LimbsCollect(object):
                            kps_inds_f.float(),
                            matched_kps_inds_t.float(),
                            min_dist,
-                           len_limbs), dim=-1)
+                           len_limbs,
+                           limb_scores), dim=-1)
 
-        # shape=(N, L, K, 10), in which the last dim includes:
-        # [x1, y1, v1, x2, y2, v2, ind1, ind2, len_delta, len_limb]
+        # shape=(N, L, K, 11), in which the last dim includes:
+        # [x1, y1, v1, x2, y2, v2, ind1, ind2, len_delta, len_limb, limb_score]
         # len_limb may be 0
         #  t = min_dist / (len_limbs + 1e-4)
 
-        return limbs.cpu()  # limbs.cpu().numpy()  # limbs TODO：测试一下哪种更快？？
+        return limbs.cpu().numpy()
 
 
 class GreedyGroup(object):
     """
     Greedily group the limbs into individual human skeletons in one image.
     Args:
-        limbs (Tensor): (L, K, 10), includes all limbs in the same image.
-        threshold (float): threshold for pose instance scores
+        limbs (np.ndarray): (L, K, 10), includes all limbs in the same image.
+        threshold (float): threshold for pose instance scores.
+        dist_max (float): abandon limbs with delta offsets bigger than dist_max。
     """
 
     def __init__(self, limbs, threshold, *, dist_max=10,
@@ -184,80 +185,137 @@ class GreedyGroup(object):
         self.dist_max = dist_max
         self.n_keypoints = len(keypoints)
         self.threshold = threshold
-
-    def group_skeletons(self, force_complete=False):
         assert len(self.limbs) == len(self.skeleton
                                       ), 'check the skeleton config and input limbs Tensor'
-        # subset shape is (1, 17, 4), mat be (M, 17, 4), the last dim includes [x, y, v, dist, ind]
-        subset = -1 * torch.ones((1, self.n_keypoints, 5))  # 注意 默认的dist竟然为-1...
-        subset[:, :, -2] = 10000  # set default dist to a big number
 
-        # Loop over all kinds of limb types
+    def group_skeletons(self, force_complete=False):
+        # subset shape is (0, 17, 4), mat be (M, 17, 4), the last dim includes [x, y, v, limb_score, ind]
+        subset = -1 * np.ones((0, self.n_keypoints, 5))
+
+        # Loop over all kinds of Limb types
         for i, ((jtype_f, jtype_t), conns) in enumerate(zip(self.skeleton, self.limbs)):
             LOG.debug('limbs from jtype_f %d --> jtype_t %d', jtype_f, jtype_t)
 
-            dist_valid = conns[:, 8] < self.dist_max  # todo: change the dist to element-wise keypoint scales
-            valid = dist_valid & (conns[:, 0] > 0) & (conns[:, 3] > 0)
-            keep_inds, = valid.nonzero(as_tuple=True)
-            if keep_inds.numel() == 0:
-                continue
-            conns = conns[keep_inds]  # (K, 10), may be (kk, 10) in which kk<K
+            # todo: change the dist to element-wise keypoint scales
+            dist_valid = conns[:, 8] < self.dist_max
 
-            jIDtab = subset[:, [jtype_f, jtype_t], -1]  # type: torch.Tensor # (M, 2)
-            distab = subset[:, [jtype_f, jtype_t], -2]  # type: torch.Tensor # (M, 2)
+            valid = dist_valid & (conns[:, 0] > 0) & (conns[:, 3] > 0) & (
+                    conns[:, 1] > 0) & (conns[:, 4] > 0)
+            conns = conns[valid]  # (K, 11), may be (kk, 11) in which kk<K
+
+            # ############ delete limb connections sharing the same keypoint ############
+            conns = self._delete_reconns(conns)
+
+            if len(conns) == 0:
+                continue
+
+            jIDtab = subset[:, [jtype_f, jtype_t], -1]  # (M, 2)
+            sub_scores = subset[:, [jtype_f, jtype_t], -2]  # (M, 2)
 
             xyv1 = conns[:, :3]  # (K, 3)
             xyv2 = conns[:, 3:6]  # (K, 3)
             limb_inds = conns[:, 6:8]  # (K, 2), joint_f_ID and joint_t_ID
-
-            limb_lens = conns[:, 8:]  # (K, 2), delta_length, limb_length
+            limb_scores = conns[:, [8, 10]]  # (K, 2), delta_length, limb_scores
 
             # suppose there are M pose skeletons, then the expanded shape is (M, K, 2)
-            jIDtab_expand = jIDtab.unsqueeze(1).expand(-1, keep_inds.numel(), -1)  # (M, K, 2)
-            distab_expand = distab.unsqueeze(1).expand(-1, keep_inds.numel(), -1)  # (M, K, 2)
+            kk = len(conns)
+            mm = len(subset)
+            jIDtab_expand = np.expand_dims(jIDtab, axis=1).repeat(kk, axis=1)  # (M, K, 2)
+            sub_scores_expand = np.expand_dims(sub_scores, axis=1).repeat(kk, axis=1)  # (M, K, 2)
 
-            limb_inds_expand = limb_inds.unsqueeze(0).expand_as(jIDtab_expand)  # (M, K, 2)
-            limb_lens_expand = limb_lens.unsqueeze(0).expand_as(distab_expand)  # (M, K, 2)
+            limb_inds_expand = np.expand_dims(limb_inds, axis=0).repeat(mm, axis=0)  # (M, K, 2)
+            limb_scores_expand = np.expand_dims(limb_scores, axis=0).repeat(mm, axis=0)  # (M, K, 2)
 
-            mask_sum = (jIDtab_expand.int() == limb_inds_expand.int()).int().sum(dim=-1)  # (M, K)
+            mask_sum = np.sum((jIDtab_expand.astype(int) == limb_inds_expand.astype(int)),
+                              axis=-1)  # (M, K)
+
             # criterion to judge if we replace the exiting keypoints
-            dist_mask = (limb_lens_expand[:, :, 0] / (limb_lens_expand[:, :, 0] + 0.1)
-                         < distab_expand[:, :, 1])  # (M, K), scale of joint_t
+            replace_mask = (limb_scores_expand[..., 1] > sub_scores_expand[..., 1]) | (
+                    limb_scores_expand[..., 1] > sub_scores_expand[..., 0])  # (M, K), score of joint_t
 
             # ########################################################################
-            # ########################## generate new skeletons ######################
+            # ######### handle redundant limbs belonging to the same person skeleton #######
             # ########################################################################
-            # set as_tuple=True will return a tuple of 1-D indexes, i.e., (tensor, )
-            New_inds, = (mask_sum.sum(dim=0) == 0).nonzero(as_tuple=True)
-            if New_inds.numel():
-                rows = -1 * torch.ones((len(New_inds), self.n_keypoints, 5))
-                rows[:, [jtype_f, jtype_t], -1] = limb_inds[New_inds]
-                rows[:, jtype_f, :3] = xyv1[New_inds]
-                rows[:, jtype_t, :3] = xyv2[New_inds]
-                # initial two connected keypoint share the same limb delta
-                rows[:, jtype_f, 3] = limb_lens[New_inds, 0]
-                rows[:, jtype_t, 3] = limb_lens[New_inds, 0]
-                subset = torch.cat((subset, rows), dim=0)
+            M_inds, K_inds = ((mask_sum == 2) & replace_mask).nonzero()  # do not forget the parenthesis!
+            if len(M_inds):
+                # maybe the current limb shares the joint_f OR joint_t with some person skeleton
+                subset[M_inds, jtype_f, 3] = np.maximum(limb_scores[K_inds, 1], subset[M_inds, jtype_f, 3])
+                subset[M_inds, jtype_t, 3] = np.maximum(limb_scores[K_inds, 1], subset[M_inds, jtype_t, 3])
+                mask_sum[mask_sum == 2] = -1  # mask out the solved limbs
 
             # ########################################################################
             # ############## connect current limbs with existing skeletons ###########
             # ########################################################################
-            #  & dist_mask # fixme: if we use dist_mask, small keypoint may be not added
-            # change to normalized dist by limb-length, this issue still not solved
-            M_inds, K_inds = (mask_sum == 1).nonzero(as_tuple=True)
-            if M_inds.numel() and K_inds.numel():
+            M_inds, K_inds = ((mask_sum == 1) & replace_mask).nonzero()
+            if len(M_inds):
                 subset[M_inds, jtype_f, -1] = limb_inds[K_inds, 0]
                 subset[M_inds, jtype_t, -1] = limb_inds[K_inds, 1]
-
                 subset[M_inds, jtype_f, :3] = xyv1[K_inds]
                 subset[M_inds, jtype_t, :3] = xyv2[K_inds]
-                # subset[M_inds, jtype_f, 3] = limb_lens[K_inds, 0]  # should not change jtype_f scale
-                subset[M_inds, jtype_t, -2] = limb_lens[K_inds, 0]
+                # maybe the current limb shares the joint_f OR joint_t with some person skeleton
+                subset[M_inds, jtype_f, 3] = np.maximum(limb_scores[K_inds, 1], subset[M_inds, jtype_f, 3])
+                subset[M_inds, jtype_t, 3] = np.maximum(limb_scores[K_inds, 1], subset[M_inds, jtype_t, 3])
+                mask_sum[mask_sum == 1] = -1  # mask out the solved limbs
 
             # ########################################################################
-            # ######### merge the subset belonging to the same person skeleton #######
+            # ######### merge the subsets belonging to the same person skeleton #######
             # ########################################################################
-            # M_inds, K_inds = ((mask_sum == 2) & ).nonzero(as_tuple=True)
-        t = subset.numpy()
-        print(t.shape)
+            if mm >= 2:
+                Msubset_expand = np.expand_dims(subset[..., -1], axis=1).repeat(mm, axis=1)  # (M, M, 17) or (M, N, 17)
+                Nsubset_expand = np.expand_dims(subset[..., -1], axis=0).repeat(mm, axis=0)  # (M, M, 17) or (M, N, 17)
+                merge_mask_sum = np.sum((Msubset_expand.astype(int) == Nsubset_expand.astype(int))
+                                        & (Msubset_expand.astype(int) != -1),  # & (Nsubset_expand.astype(int) != -1)
+                                        axis=-1)  # (M, M)
+                # np.fill_diagonal(merge_mask_sum, 0)
+                merge_mask_sum = np.triu(merge_mask_sum, 1)
+                M_inds, N_inds = (merge_mask_sum == 2).nonzero()  # todo: 添加merge的阈值条件？
+                if len(M_inds):  # merge skeletons belonging to the same person
+                    subset[M_inds, :, :] = np.maximum(subset[M_inds, :, :], subset[N_inds, :, :])
+                    subset = np.delete(subset, N_inds, axis=0)
 
+                # other cases
+                M_inds, N_inds = (merge_mask_sum >= 3).nonzero()
+                if len(M_inds):
+                    print('usually this never happens, we ignore handling skeletons crossing at 3 joints')
+                    pass
+
+            # ########################################################################
+            # ########################## generate new skeletons ######################
+            # ########################################################################
+            New_inds, = (np.sum(mask_sum, axis=0) == 0).nonzero()  # sum(tensor of size[0])=0
+            if len(New_inds):
+                rows = -1 * np.ones((len(New_inds), self.n_keypoints, 5))
+                rows[:, [jtype_f, jtype_t], -1] = limb_inds[New_inds]
+                rows[:, jtype_f, :3] = xyv1[New_inds]
+                rows[:, jtype_t, :3] = xyv2[New_inds]
+                # initial two connected keypoint share the same limb delta
+                rows[:, jtype_f, 3] = limb_scores[New_inds, 1]
+                rows[:, jtype_t, 3] = limb_scores[New_inds, 1]
+                subset = np.concatenate((subset, rows), axis=0)
+
+            if force_complete:
+                # todo: 将没有limb连接分配的且响应高的点强行分配，但是貌似做不到，
+                #  因为这依赖于之前生成的candidate limbs，总是两个joints对
+                pass
+        # t = subset  # for debug
+        # print(subset.shape)
+
+        return subset  # numpy array [M * [x, y, v, limb_score, ind]]
+
+    @staticmethod
+    def _delete_reconns(conns):
+        """
+        Ensure one keypoint can only be used once by adjacent keypoints in the skeleton.
+        Args:
+            conns (np.ndarray): shape (K, 11), in which the last dim includes:
+                [x1, y1, v1, x2, y2, v2, ind1, ind2, len_delta, len_limb, limb_score]
+        """
+        conns = conns[np.argsort(-conns[:, -1])]  # sort by subset_scores
+        repeat_check = []
+        unique_list = []
+        for j, ind_t in enumerate(conns[:, 7].astype(int)):
+            if ind_t not in repeat_check:
+                repeat_check.append(ind_t)
+                unique_list.append(j)
+        conns = conns[unique_list]
+        return conns

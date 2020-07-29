@@ -30,8 +30,8 @@ def hmp_NMS(heat, kernel=3):  # , thre=0.001
 def topK_channel(scores, K=40):  # y=0, x=1,2,3,4... may be preserved because the lack of high peaks
     """
     Collect top K peaks and corresponding coordinates on each heatmap channel.
-    Notes:
 
+    Notes:
         Top K may include very small even zero responses!
     """
     n, c, h, w = scores.shape
@@ -39,3 +39,11 @@ def topK_channel(scores, K=40):  # y=0, x=1,2,3,4... may be preserved because th
     topk_ys = (topk_idxs / w)
     topk_xs = (topk_idxs % w)
     return topk_scores, topk_idxs, topk_ys, topk_xs
+
+
+def joint_dets(hmps, k):
+    """Select Top k candidate keypoints in heatmaps"""
+    filtered_hmps = hmp_NMS(hmps)
+    # shape of hm_score, hm_inds, topk_ys, topk_xs = [batch, 17, topk]
+    dets = topK_channel(filtered_hmps, K=k)
+    return dets

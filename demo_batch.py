@@ -146,7 +146,7 @@ def main():
 
     # ############################# Train and Validate #############################
     for epoch in range(start_epoch, start_epoch + args.epochs):
-        test(train_loader, model, lossfuns, epoch)
+        test(val_loader, model, lossfuns, epoch)
 
 
 def test(val_loader, model, criterion, epoch):
@@ -226,7 +226,7 @@ def test(val_loader, model, criterion, epoch):
             tt1 = t1 - t0
             LOG.info('interpolation tims: %.6f', tt1)
             gen = decoder.LimbsCollect(hmps, offs, 1, 1,
-                                       topk=48, thre_hmp=0.08)
+                                       topk=96, thre_hmp=0.1)
             t2 = time.time()
 
             limbs = gen.generate_limbs()
@@ -240,7 +240,7 @@ def test(val_loader, model, criterion, epoch):
             for ltype_i, connects in enumerate(limb):
                 xyv1 = connects[:, 0:3]
                 xyv2 = connects[:, 3:6]
-                len_delta = connects[:, -2]
+                len_delta = connects[:, -3]
                 for i in range(len(xyv1)):
                     if xyv1[i, 0] > 0 and xyv2[i, 0] > 0 and len_delta[i] <= 10:
                         x1, y1 = xyv1[i, :2].tolist()
@@ -249,12 +249,25 @@ def test(val_loader, model, criterion, epoch):
                         plt.scatter([x1, x2], [-y1, -y2], color='g')
                         plt.xlim((0, args.square_length))
                         plt.ylim((-args.square_length, 0))
+            plt.title('all candidate limbs')
             plt.show()
 
             assemble = decoder.GreedyGroup(limb, 0.1)
             t0 = time.time()
-            single_pose = assemble.group_skeletons()
+            image_poses = assemble.group_skeletons()
+
+            for pose_idx, pose in enumerate(image_poses):
+                xyvs = pose[:, :3]
+                for i in range(len(xyvs)):
+                    if xyvs[i, 0] > 0 and xyvs[i, 1] > 0 and xyvs[i, 2] > 0.1:
+                        plt.scatter([xyvs[i, 0]], [-xyvs[i, 1]], color='g')
+                        plt.xlim((0, args.square_length))
+                        plt.ylim((-args.square_length, 0))
+            plt.title('output of greedy assignment algorithm')
+            plt.show()
+
             t1 = time.time() - t0
+            LOG.info('\nGreedy grouping time: %.6f\n', t1)
 
         if isinstance(args.show_limb_idx, int):
             hmps = outputs[0][0][1].cpu().numpy()
