@@ -291,7 +291,7 @@ class exkp(nn.Module):
             if ind < self.nstack - 1:
                 inter = self.inters_[ind](inter) + self.cnvs_[ind](cnv)
                 inter = self.relu(inter)
-                #  Official hourglass-104 did'nt feed the supervised heatmaps of stack 1 to stack 2
+                #   TODO： Official hourglass-104 did'nt feed the supervised heatmaps of stack 1 to stack 2
                 #   Maybe we should feed the heatmaps into the later stages? However,
                 #   CornerNet says adding back the intermediate predictions hurts the net performance
                 inter = self.inters[ind](inter)

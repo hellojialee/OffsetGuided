@@ -16,7 +16,7 @@ import transforms
 import encoder
 import models
 import logs
-from visualization.show import draw_limb_offset
+from visualization import show
 import decoder
 
 try:
@@ -102,7 +102,7 @@ def main():
 
     preprocess_transformations += [
         # transforms.RandomApply(transforms.JpegCompression(), 0.1),
-        transforms.RandomApply(transforms.ColorTint(), 0.12),
+        transforms.RandomApply(transforms.ColorTint(), 0),
         transforms.ImageTransform(torchvision.transforms.ToTensor()),
         transforms.ImageTransform(
             torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -225,49 +225,66 @@ def test(val_loader, model, criterion, epoch):
             t1 = time.time()
             tt1 = t1 - t0
             LOG.info('interpolation tims: %.6f', tt1)
-            gen = decoder.LimbsCollect(hmps, offs, 1, 1,
+            gen = decoder.LimbsCollect(1, 1, use_scale=True,
                                        topk=96, thre_hmp=0.1)
             t2 = time.time()
 
-            limbs = gen.generate_limbs()
+            limbs = gen.generate_limbs(hmps, offs)
             torch.cuda.synchronize()  # 需要吗？
             tt2 = time.time() - t2
             LOG.info('keypoint pairing time: %.6f', tt2)
             t2 = time.time() - t0
             LOG.info('keypoint detection and pairing time: %.6f', t2)
 
-            limb = limbs[0]
-            for ltype_i, connects in enumerate(limb):
-                xyv1 = connects[:, 0:3]
-                xyv2 = connects[:, 3:6]
-                len_delta = connects[:, -3]
-                for i in range(len(xyv1)):
-                    if xyv1[i, 0] > 0 and xyv2[i, 0] > 0 and len_delta[i] <= 10:
-                        x1, y1 = xyv1[i, :2].tolist()
-                        x2, y2 = xyv2[i, :2].tolist()
-                        plt.plot([x1, x2], [-y1, -y2], color='r')
-                        plt.scatter([x1, x2], [-y1, -y2], color='g')
-                        plt.xlim((0, args.square_length))
-                        plt.ylim((-args.square_length, 0))
-            plt.title('all candidate limbs')
-            plt.show()
+            limb = limbs[0]  # obtain a image in the batch
 
-            assemble = decoder.GreedyGroup(limb, 0.1)
+            # for ltype_i, connects in enumerate(limb):
+            #     xyv1 = connects[:, 0:3]
+            #     xyv2 = connects[:, 3:6]
+            #     len_delta = connects[:, -3]
+            #     for i in range(len(xyv1)):
+            #         if xyv1[i, 0] > 0 and xyv2[i, 0] > 0 and len_delta[i] <= 10:
+            #             x1, y1 = xyv1[i, :2].tolist()
+            #             x2, y2 = xyv2[i, :2].tolist()
+            #             plt.plot([x1, x2], [-y1, -y2], color='r')
+            #             plt.scatter([x1, x2], [-y1, -y2], color='g')
+            #             plt.xlim((0, args.square_length))
+            #             plt.ylim((-args.square_length, 0))
+            # plt.title('all candidate limbs')
+            # plt.show()
+
+            assemble = decoder.GreedyGroup(0.1, use_scale=True)
             t0 = time.time()
-            image_poses = assemble.group_skeletons()
-
-            for pose_idx, pose in enumerate(image_poses):
-                xyvs = pose[:, :3]
-                for i in range(len(xyvs)):
-                    if xyvs[i, 0] > 0 and xyvs[i, 1] > 0 and xyvs[i, 2] > 0.1:
-                        plt.scatter([xyvs[i, 0]], [-xyvs[i, 1]], color='g')
-                        plt.xlim((0, args.square_length))
-                        plt.ylim((-args.square_length, 0))
-            plt.title('output of greedy assignment algorithm')
-            plt.show()
-
+            image_poses = assemble.group_skeletons(limb)
             t1 = time.time() - t0
             LOG.info('\nGreedy grouping time: %.6f\n', t1)
+
+            # for pose_idx, pose in enumerate(image_poses):
+            #     xyvs = pose[:, :3]
+            #     for i in range(len(xyvs)):
+            #         if xyvs[i, 0] > 0 and xyvs[i, 1] > 0 and xyvs[i, 2] > 0.1:
+            #             plt.scatter([xyvs[i, 0]], [-xyvs[i, 1]], color='g')
+            #             plt.xlim((0, args.square_length))
+            #             plt.ylim((-args.square_length, 0))
+            # plt.title('output of greedy assignment algorithm')
+            # plt.show()
+
+            # image = images.cpu().numpy()[0, ...].transpose((1, 2, 0))  # the first image
+            # image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
+            # skeleton = encoder.OffsetMaps.skeleton
+
+            # visualizers
+            # keypoint_painter = show.KeypointPainter(
+            #     show_box=False,
+            #     # color_connections=True, linewidth=5,
+            # )
+            # with show.image_canvas(image,
+            #                        # output_path + '.keypoints.png',
+            #                        show=True,
+            #                        # fig_width=args.figure_width,
+            #                        # dpi_factor=args.dpi_factor
+            #                        ) as ax:
+            #     keypoint_painter.keypoints(ax, image_poses[:, :, :3], skeleton=skeleton)
 
         if isinstance(args.show_limb_idx, int):
             hmps = outputs[0][0][1].cpu().numpy()
@@ -280,7 +297,7 @@ def test(val_loader, model, criterion, epoch):
             skeleton = encoder.OffsetMaps.skeleton
             # first ,we should roughly rescale the image into the range of [0, 1]
             image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
-            draw_limb_offset(hmp, image, off, args.show_limb_idx, skeleton, s=7, thre=0.1)
+            show.draw_limb_offset(hmp, image, off, args.show_limb_idx, skeleton, s=7, thre=0.1)
 
         if batch_idx % args.print_freq == 0:
             reduced_loss = loss.data
