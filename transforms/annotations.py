@@ -26,6 +26,7 @@ class NormalizeAnnotations(Preprocess):
         keypoints = np.zeros((num_people, len(COCO_KEYPOINTS), 4), dtype=np.float32)
 
         for i, ann in enumerate(anns):
+            # notice the reshape's mechanism: wrap the every 3 element firstly.
             keypoints[i, :, :3] = np.asarray(ann['keypoints'], dtype=np.float32).reshape(-1, 3)
             keypoints[i, :, 3] = math.sqrt(ann['area']
                                            ) * np.array(COCO_PERSON_SIGMAS)

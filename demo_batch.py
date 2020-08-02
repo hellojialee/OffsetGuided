@@ -226,7 +226,7 @@ def test(val_loader, model, criterion, epoch):
             tt1 = t1 - t0
             LOG.info('interpolation tims: %.6f', tt1)
             gen = decoder.LimbsCollect(1, 1, use_scale=True,
-                                       topk=96, thre_hmp=0.1)
+                                       topk=96, thre_hmp=0.06)
             t2 = time.time()
 
             limbs = gen.generate_limbs(hmps, offs)
@@ -253,11 +253,11 @@ def test(val_loader, model, criterion, epoch):
             # plt.title('all candidate limbs')
             # plt.show()
 
-            assemble = decoder.GreedyGroup(0.1, use_scale=True)
+            assemble = decoder.GreedyGroup(0.06, use_scale=True, sort_dim=2)
             t0 = time.time()
             image_poses = assemble.group_skeletons(limb)
             t1 = time.time() - t0
-            LOG.info('\nGreedy grouping time: %.6f\n', t1)
+            LOG.info('\nGreedy grouping time: %.6f\n %d person poses', t1, len(image_poses))
 
             # for pose_idx, pose in enumerate(image_poses):
             #     xyvs = pose[:, :3]
@@ -269,11 +269,10 @@ def test(val_loader, model, criterion, epoch):
             # plt.title('output of greedy assignment algorithm')
             # plt.show()
 
+            # # ############ visualizers
             # image = images.cpu().numpy()[0, ...].transpose((1, 2, 0))  # the first image
             # image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
             # skeleton = encoder.OffsetMaps.skeleton
-
-            # visualizers
             # keypoint_painter = show.KeypointPainter(
             #     show_box=False,
             #     # color_connections=True, linewidth=5,

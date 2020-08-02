@@ -209,7 +209,7 @@ class ImageList(torch.utils.data.Dataset):
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        anns = []
+        anns = []  # for compatibility: there is no annotation
         image, anns, meta, _ = self.preprocess(image, anns, None, None)
         meta.update({
             'dataset_index': index,

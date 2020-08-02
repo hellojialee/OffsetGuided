@@ -1,3 +1,4 @@
+"""Efficient WarpAffine transforms for images and labels during our training process"""
 from .preprocess import Preprocess
 import numpy as np
 import random
@@ -45,6 +46,7 @@ class WarpAffineTransforms(Preprocess):
     Args:
         dst_size (int, list): the dst input image size of (width, height) or square length.
         aug_params (Namespace, Class, None): augmentation params used in data transformations.
+        crop_roi (bool): crop the valid area including person keypoints
     """
 
     def __init__(self, dst_size, *,
@@ -93,7 +95,7 @@ class WarpAffineTransforms(Preprocess):
                                (self.in_size[1], self.in_size[0]),
                                flags=cv2.INTER_CUBIC,
                                borderMode=cv2.BORDER_CONSTANT,
-                               borderValue=(124, 116, 104))  # fill mean rgb values
+                               borderValue=(124, 116, 104))  # fill mean RGB values  255* array([0.485, 0.456, 0.406])
         if mask_miss is not None:
             mask_miss = self._affine_mask_miss(M, mask_miss)
 
@@ -217,7 +219,7 @@ class WarpAffineTransforms(Preprocess):
                                   [0., 0., 1.]])
 
         # order of combination is reversed because we use row vector [x, y, 1]
-        # 这取决于坐标是行向量还是列向量，对应变换矩阵是左乘还是右乘，后面变换时坐标专成了列向量
+        # 这取决于坐标是行向量还是列向量，对应变换矩阵是左乘还是右乘，后面变换时坐标转成了列向量
         affine_mat = center2center.dot(zero2center).dot(flip).\
             dot(scale).dot(rotate).dot(center2zero)
 
