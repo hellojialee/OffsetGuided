@@ -155,9 +155,10 @@ class HeatMapsLoss(object):
                 inter2 = self.hmp_loss(bg_hmp, gt_bghmp, mask_miss)  # type: torch.Tensor
                 weighted_bgloss = torch.mul(inter2.sum(), self.stack_weights[stack_i])
                 out2.append(weighted_bgloss)
-        LOG.debug('hmp loss at each stack: %s, \t background hmp loss at eack stack: %s'
-                  , torch.tensor(out1).cpu().numpy().tolist(), torch.tensor(out2).cpu().numpy().tolist())
-        return sum(out1) / batch_size, sum(out2) / batch_size
+        LOG.debug('hmp loss at each stack: %s, \t background hmp loss at eack stack: %s',
+                  torch.tensor(out1).cpu().numpy().tolist(),
+                  torch.tensor(out2).cpu().numpy().tolist())
+        return sum(out1) / batch_size, sum(out2) / batch_size  # hmp_loss, bg_hmp_loss
 
 
 class OffsetMapsLoss(object):

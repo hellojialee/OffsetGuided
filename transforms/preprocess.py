@@ -1,9 +1,23 @@
 from abc import ABCMeta, abstractmethod
 import copy
+import numpy as np
 
 
-class Preprocess(metaclass=ABCMeta):  # 利用abc模块实现抽象类
-    # 抽象类中只能有抽象方法（没有实现功能），该类不能被实例化，只能被继承，且子类必须实现抽象方法。
-    @abstractmethod  # 定义抽象方法，无需实现功能，但是子类必须实现该抽象方法，否则报错
+class Preprocess(metaclass=ABCMeta):
+
     def __call__(self, image, anns, meta, mask_miss):
         """Implementation of preprocess operation."""
+
+    @staticmethod
+    def affine_keypoint_inverse(anns, meta):  # to be tested and checked
+        M = np.linalg.inv(meta['affine3×3mat'])
+        original_joints = copy.deepcopy(anns)[..., :3]
+        original_joints[:, :, 2] = 1  # Homogeneous coordinates
+        # np.matmul regards the last two axis as matrix, and broadcast is used in our case.
+        affine_joints = np.matmul(
+            M[0:2],
+            original_joints.transpose([0, 2, 1])).transpose([0, 2, 1])
+        anns[:, :, 0:2] = affine_joints
+        # channel indexing.
+        anns[:, meta['joint_channel_ind'], :] = anns
+        return anns

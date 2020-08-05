@@ -25,15 +25,37 @@ def _roi_center(anns, meta):
     return np.array([(min_x + max_x) // 2, (min_y + max_y) // 2]).astype(np.float32)
 
 
-class AugParams:
+class FixedAugParams(object):
     """
-    An example of augmentation params.
+    An example of none-random augmentation params for warp affine.
     """
-    flip_prob = 0
-    max_rotate = 0
-    min_scale = 1.
-    max_scale = 1.
-    max_translate = 0.
+    def __init__(self):
+        self._flip_prob = 0
+        self._max_rotate = 0
+        self._min_scale = 1.
+        self._max_scale = 1.
+        self._max_translate = 0.
+
+    @property
+    def flip_prob(self):
+        """Get the current voltage."""
+        return self._flip_prob
+
+    @property
+    def max_rotate(self):
+        return self._max_rotate
+
+    @property
+    def min_scale(self):
+        return self._min_scale
+
+    @property
+    def max_scale(self):
+        return self._max_scale
+
+    @property
+    def max_translate(self):
+        return self._max_translate
 
 
 class WarpAffineTransforms(Preprocess):
@@ -99,7 +121,7 @@ class WarpAffineTransforms(Preprocess):
         if mask_miss is not None:
             mask_miss = self._affine_mask_miss(M, mask_miss)
 
-        self._affine_keypoints(M, anns)
+        self._affine_keypoints(M, anns, meta)  # in-place transform
 
         if self.debug_show:
             self._show_affine_result(anns, image, mask_miss)
@@ -144,7 +166,8 @@ class WarpAffineTransforms(Preprocess):
         # mask_miss = (mask_miss > 0.5).astype(np.float32)
         return mask_miss
 
-    def _affine_keypoints(self, M, anns):
+    def _affine_keypoints(self, M, anns, meta):
+        """Affine he keypoint annotations in-place"""
         original_joints = copy.deepcopy(anns)[..., :3]
         # we reuse 3rd column, it is a trick.
         original_joints[:, :, 2] = 1
@@ -159,9 +182,12 @@ class WarpAffineTransforms(Preprocess):
             assert len(RIGHT_INDEX) == len(LEFT_INDEX), 'check left and right body keypoints'
             tmp_left = anns[:, LEFT_INDEX, :]
             tmp_right = anns[:, RIGHT_INDEX, :]
+            # swap the left and right
             anns[:, LEFT_INDEX, :] = tmp_right
             anns[:, RIGHT_INDEX, :] = tmp_left
             LOG.debug('flip left and right keypoints during augmentation')
+            meta['joint_channel_ind'][LEFT_INDEX] = RIGHT_INDEX
+            meta['joint_channel_ind'][RIGHT_INDEX] = LEFT_INDEX
 
         # crop the keypoints beyond the image boarder
         for i, p in enumerate(anns):

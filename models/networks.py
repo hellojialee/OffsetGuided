@@ -177,11 +177,12 @@ class NetworkWrapper(torch.nn.Module):
         # Notice!  subnets in list or dict must be warped
         # by ModuleList to register trainable params
         self.headnets = torch.nn.ModuleList(headnets)
+        self.head_strides = [hn.stride for hn in headnets]
+        self.head_names = [hn.head_name for hn in headnets]
         LOG.debug('warp the basnet and headnets into a whole model')
 
     def forward(self, img_tensor):
-        # Batch will be divided and Parallel Model
-        # will call this forward on every GPU
+        # Batch will be divided and Parallel Model will call this forward on every GPU
         feature_tuple = self.basenet(img_tensor)
         head_outputs = [hn(feature_tuple) for hn in self.headnets]
         LOG.debug('final output length of the model: %s ', len(head_outputs))
@@ -203,6 +204,10 @@ def basenet_factory(basenet_name):
     if 'hourglass104' in basenet_name:
         model = Hourglass104(None, 2)
         return model, 2, 4, 256
+
+    if 'hourglass52' in basenet_name:
+        model = Hourglass104(None, 1)
+        return model, 1, 4, 256
 
     if 'hourglass4stage' in basenet_name:
         class IMHNOpt:

@@ -49,7 +49,8 @@ class NormalizeAnnotations(Preprocess):
                 'width_height': np.array([w, h]),
                 'affine3×3mat': np.array([[1., 0., 0],
                                           [0., 1., 0],
-                                          [0., 0., 1.]], dtype=np.float32)
+                                          [0., 0., 1.]], dtype=np.float32),
+                'joint_channel_ind': np.arange(len(COCO_KEYPOINTS))
             }
 
         return image, anns, meta, mask_miss
@@ -70,7 +71,7 @@ class AnnotationJitter(Preprocess):
         meta = copy.deepcopy(meta)
         anns = copy.deepcopy(anns)
 
-        for ann in anns:
+        for ann in anns:  # loop over each person's annotation
             keypoints_xy = ann[:, :2]  # slice reference
             sym_rnd = (torch.rand(*keypoints_xy.shape).numpy() - 0.5) * 2.0
             # torch.rand生成0-1均匀分布，上面一步见了0.5，相当于-0.5~0.5均匀分布

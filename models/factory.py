@@ -37,7 +37,8 @@ def net_cli(parser):
                        help='head networks')
     group.add_argument('--strides', default=[4, 4], nargs='+', type=int,
                        help='rations of the input to the output of basenet, '
-                            'also the strides of all sub headnets')
+                            'also the strides of all sub headnets. '
+                            'Also, they determin the strides in encoder and decoder')
     group.add_argument('--include-spread', default=False, action='store_true',
                        help='add conv layers to regress the spread_b '
                             'of Laplace distribution, you should set it to '
@@ -119,7 +120,7 @@ def model_factory(args):
 
 
 def hourglass_from_scratch(base_name, pretrained, basenet_checkpoint, initialize_whole):
-    basenet, n_stacks, stride, feature_dim = networks.basenet_factory(
+    basenet, n_stacks, stride, feature_channel = networks.basenet_factory(
         base_name)
     # initialize model params in-place, for not all params are old ones from pre-trained model
     if initialize_whole:
@@ -129,7 +130,9 @@ def hourglass_from_scratch(base_name, pretrained, basenet_checkpoint, initialize
         basenet, _, _, _, _ = networks.load_model(
             basenet, basenet_checkpoint)
 
-    return basenet, n_stacks, stride, feature_dim
+    LOG.info('select %s as the backbone, n_stacks=%d, stride=%d, feature_channels=%d',
+             basenet.__class__.__name__, n_stacks, stride, feature_channel)
+    return basenet, n_stacks, stride, feature_channel
 
 
 def debug_parse_args():

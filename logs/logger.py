@@ -14,10 +14,11 @@ def boolean_string(s):
 
 def cli(parser):
     group = parser.add_argument_group('logging')
-    group.add_argument('--logging-output', default=None, type=str)
-    group.add_argument('--logging-stdout', default=False, type=bool,
+    group.add_argument('--logging-output', default=None, type=str,
+                       help='path to write the log')
+    group.add_argument('--logging-stdout', default=False, type=boolean_string,
                        help='print the detailed log at stdout stream')
-    group.add_argument('--logging-write', default=True, type=bool,
+    group.add_argument('--logging-write', default=True, type=boolean_string,
                        help='write the detailed log into log file')
     group.add_argument('--debug', default=False, action='store_true',
                        help='print debug messages')

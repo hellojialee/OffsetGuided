@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import time
 import datetime
 import numpy as np
-
+import multiprocessing
 import torch
 import torch.distributed as dist
 import torchvision
@@ -43,6 +43,7 @@ def demo_cli():
     data.data_cli(parser)
     models.net_cli(parser)
     encoder.encoder_cli(parser)
+    decoder.decoder_cli(parser)
 
     parser.add_argument('--resume', '-r', action='store_true', default=False,
                         help='resume from checkpoint')
@@ -95,7 +96,7 @@ def main():
     preprocess_transformations = [
         transforms.NormalizeAnnotations(),
         transforms.WarpAffineTransforms(args.square_length,
-                                        aug_params=transforms.AugParams(),
+                                        aug_params=transforms.FixedAugParams(),
                                         debug_show=args.debug_affine_show),
         # transforms.RandomApply(transforms.AnnotationJitter(), 0.1),
     ]
@@ -112,8 +113,8 @@ def main():
 
     target_transform = encoder.encoder_factory(args, args.strides)
 
-    train_data, val_data = data.dataset_factory(args, preprocess,
-                                                target_transform)
+    train_loader, val_loader = data.dataloader_factory(args, preprocess,
+                                                       target_transform)
 
     model, lossfuns = models.model_factory(args)
 
@@ -130,26 +131,14 @@ def main():
                            keep_batchnorm_fp32=args.keep_batchnorm_fp32,
                            loss_scale=args.loss_scale)
 
-    # 创建数据加载器，在训练和验证步骤中喂数据
-    train_loader = torch.utils.data.DataLoader(train_data,
-                                               batch_size=args.batch_size,
-                                               shuffle=False,
-                                               num_workers=args.loader_workers,
-                                               pin_memory=args.pin_memory,
-                                               drop_last=True)
-    val_loader = torch.utils.data.DataLoader(val_data,
-                                             batch_size=args.batch_size,
-                                             shuffle=False,
-                                             num_workers=args.loader_workers,
-                                             pin_memory=args.pin_memory,
-                                             drop_last=True)
+    processor = decoder.decoder_factory(args)
 
     # ############################# Train and Validate #############################
     for epoch in range(start_epoch, start_epoch + args.epochs):
-        test(val_loader, model, lossfuns, epoch)
+        test(val_loader, model, lossfuns, epoch, processor)
 
 
-def test(val_loader, model, criterion, epoch):
+def test(val_loader, model, criterion, epoch, processor):
     """
     Args:
         val_loader:
@@ -164,6 +153,8 @@ def test(val_loader, model, criterion, epoch):
     batch_time = AverageMeter()
     losses = AverageMeter()
     end = time.time()
+
+    worker_pool = multiprocessing.Pool(args.batch_size)  # #  # default: multiprocessing.cpu_count()
 
     for batch_idx, (images, annos, metas) in enumerate(val_loader):
 
@@ -181,6 +172,24 @@ def test(val_loader, model, criterion, epoch):
                                zip(args.lambdas, multi_losses)]
             loss = sum(weighted_losses)  # args.lambdas defined in models.factory
 
+        batch_poses = processor.generate_poses(outputs)
+        image_poses = batch_poses[3]
+
+        image = images.cpu().numpy()[3, ...].transpose((1, 2, 0))  # the first image
+        image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
+        skeleton = encoder.OffsetMaps.skeleton
+        keypoint_painter = show.KeypointPainter(
+            show_box=False,
+            # color_connections=True, linewidth=5,
+        )
+        with show.image_canvas(image,
+                               # output_path + '.keypoints.png',
+                               show=True,
+                               # fig_width=args.figure_width,
+                               # dpi_factor=args.dpi_factor
+                               ) as ax:
+            keypoint_painter.keypoints(ax, image_poses[:, :, :3], skeleton=skeleton)
+
         LOG.info({
             'type': f'validate-at-rank{args.local_rank}',
             'epoch': epoch,
@@ -196,6 +205,8 @@ def test(val_loader, model, criterion, epoch):
             sizeHW = (args.square_length, args.square_length)
             hmps = torch.nn.functional.interpolate(hmps, size=sizeHW, mode="bicubic")
             offs = torch.nn.functional.interpolate(offs, size=sizeHW, mode="bicubic")
+            plt.imshow(hmps.cpu().numpy()[0, 0])
+            plt.show()
 
             filter_map = decoder.hmp_NMS(hmps)
             hmp = filter_map[0, args.show_hmp_idx].cpu().numpy()
@@ -225,18 +236,19 @@ def test(val_loader, model, criterion, epoch):
             t1 = time.time()
             tt1 = t1 - t0
             LOG.info('interpolation tims: %.6f', tt1)
-            gen = decoder.LimbsCollect(1, 1, use_scale=True,
+
+            gen = decoder.LimbsCollect(1, 1, include_scale=True,
                                        topk=96, thre_hmp=0.06)
             t2 = time.time()
 
-            limbs = gen.generate_limbs(hmps, offs)
+            limbs = gen.generate_limbs(hmps, offs, 8 * torch.ones_like(hmps))
+            limbs = limbs.cpu().numpy()
+
             torch.cuda.synchronize()  # 需要吗？
             tt2 = time.time() - t2
             LOG.info('keypoint pairing time: %.6f', tt2)
             t2 = time.time() - t0
             LOG.info('keypoint detection and pairing time: %.6f', t2)
-
-            limb = limbs[0]  # obtain a image in the batch
 
             # for ltype_i, connects in enumerate(limb):
             #     xyv1 = connects[:, 0:3]
@@ -253,9 +265,13 @@ def test(val_loader, model, criterion, epoch):
             # plt.title('all candidate limbs')
             # plt.show()
 
-            assemble = decoder.GreedyGroup(0.06, use_scale=True, sort_dim=2)
+            assemble = decoder.GreedyGroup(0.1, use_scale=True, sort_dim=2)
             t0 = time.time()
-            image_poses = assemble.group_skeletons(limb)
+            # limbs_list = [(image_limb,) for i, image_limb in enumerate(limbs)]  # each element must be a tuple
+            # starmap blocks the main process to wait all pools, while starmap_async is only little faster
+            batch_poses = worker_pool.starmap(assemble.group_skeletons, zip(limbs))
+            #
+            image_poses = batch_poses[3]
             t1 = time.time() - t0
             LOG.info('\nGreedy grouping time: %.6f\n %d person poses', t1, len(image_poses))
 
@@ -269,21 +285,21 @@ def test(val_loader, model, criterion, epoch):
             # plt.title('output of greedy assignment algorithm')
             # plt.show()
 
-            # # ############ visualizers
-            # image = images.cpu().numpy()[0, ...].transpose((1, 2, 0))  # the first image
-            # image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
-            # skeleton = encoder.OffsetMaps.skeleton
-            # keypoint_painter = show.KeypointPainter(
-            #     show_box=False,
-            #     # color_connections=True, linewidth=5,
-            # )
-            # with show.image_canvas(image,
-            #                        # output_path + '.keypoints.png',
-            #                        show=True,
-            #                        # fig_width=args.figure_width,
-            #                        # dpi_factor=args.dpi_factor
-            #                        ) as ax:
-            #     keypoint_painter.keypoints(ax, image_poses[:, :, :3], skeleton=skeleton)
+            # ############ visualizers
+            image = images.cpu().numpy()[3, ...].transpose((1, 2, 0))  # the first image
+            image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
+            skeleton = encoder.OffsetMaps.skeleton
+            keypoint_painter = show.KeypointPainter(
+                show_box=False,
+                # color_connections=True, linewidth=5,
+            )
+            with show.image_canvas(image,
+                                   # output_path + '.keypoints.png',
+                                   show=True,
+                                   # fig_width=args.figure_width,
+                                   # dpi_factor=args.dpi_factor
+                                   ) as ax:
+                keypoint_painter.keypoints(ax, image_poses[:, :, :3], skeleton=skeleton)
 
         if isinstance(args.show_limb_idx, int):
             hmps = outputs[0][0][1].cpu().numpy()
@@ -334,9 +350,16 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
+def pool_callback():
+    pass
+
+
 if __name__ == '__main__':
     log_level = logging.INFO  # logging.DEBUG
     # set RootLogger
-    logging.basicConfig(level=log_level)
+    logging.basicConfig(
+        level=log_level,
+        # format="%(asctime)s 【 %(process)d 】 %(processName)s %(message)s"
+    )
 
     main()

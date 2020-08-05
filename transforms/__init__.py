@@ -21,7 +21,7 @@ from .pad import CenterPad
 from .random import RandomApply
 from .scale import RescaleAbsolute, RescaleRelative
 from .affine import WarpAffineTransforms
-from .affine import AugParams
+from .affine import FixedAugParams
 
 
 EVAL_TRANSFORM = Compose([

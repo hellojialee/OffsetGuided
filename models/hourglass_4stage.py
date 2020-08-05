@@ -1,6 +1,6 @@
 """Standard 4-stage hourglass network used in Associative Embedding and Simple Pose"""
 # ------------------------------------------------------------------------------
-# This code is base on
+# This code is borrowed from
 #  Simple Pose (https://github.com/hellojialee/Improved-Body-Parts)
 # ------------------------------------------------------------------------------
 

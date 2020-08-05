@@ -137,10 +137,10 @@ def headnets_factory(headnames, n_stacks, strides, inp_dim,
         include_background: add the heatmap of background
     """
 
-    encoders = [factory_head(h, n_stacks, s, inp_dim, include_spread, include_background, include_scale)
+    headnets = [factory_head(h, n_stacks, s, inp_dim, include_spread, include_background, include_scale)
                 for h, s in zip(headnames, strides)]
 
-    return encoders
+    return headnets
 
 
 def factory_head(head_name, n_stacks, stride, inp_dim,
@@ -166,7 +166,7 @@ def factory_head(head_name, n_stacks, stride, inp_dim,
         else:
             n_keypoints = 17
 
-        LOG.info('select HeatMapsHead to infer %d keypoint', n_keypoints)
+        LOG.info('select HeatMapsHead of stride %d to infer %d keypoint', stride, n_keypoints)
         HeatMapsHead.stride = stride
         HeatMapsHead.n_keypoints = n_keypoints
         HeatMapsHead.include_background = include_background
@@ -185,14 +185,13 @@ def factory_head(head_name, n_stacks, stride, inp_dim,
                 'using %d skeleton connections to generate offsetmaps',
                 n_skeleton)
             assert n_skeleton in [
-                19, 16, 25, 6], 'check skeleton configuration'
+                19, 16, 29, 6], 'check skeleton configuration'
 
         else:
             n_skeleton = 19
 
-        LOG.info(
-            'select OffsetMapsHead to infer %d skeleton connections',
-            n_skeleton)
+        LOG.info('select OffsetMapsHead of stride %d to infer %d skeleton connections',
+                 stride, n_skeleton)
         OffsetMapsHead.stride = stride
         OffsetMapsHead.n_skeleton = n_skeleton
         OffsetMapsHead.include_spread = include_spread

@@ -79,13 +79,16 @@ def factory_head(head_name, square_length, stride):
             n_keypoints = int(m.group(1))  # group eg: hmps17, hmps, 17
             LOG.info('using %d keypoints to generate heatmaps', n_keypoints)
             assert n_keypoints == 17, f'{n_keypoints} keypoints not supported'
+            keypoints = None
 
         else:
             n_keypoints = 17
             keypoints = COCO_KEYPOINTS
 
-        LOG.info('selected encoder: Heatmap for %s with %d keypoints', head_name, n_keypoints)
+        LOG.info('selected encoder: Heatmap for %s of stride %d computed by %d keypoints',
+                 head_name, stride, n_keypoints)
         HeatMaps.n_keypoints = n_keypoints
+        HeatMaps.keypoints = keypoints
         return HeatMaps(square_length, stride)
 
     if head_name in ('omp',
@@ -99,7 +102,7 @@ def factory_head(head_name, square_length, stride):
         elif head_name in ('omp16',):
             n_keypoints = 17
             OffsetMaps.skeleton = KINEMATIC_TREE_SKELETON
-        elif head_name in ('omp25',):
+        elif head_name in ('omp29',):
             n_keypoints = 17
             OffsetMaps.skeleton = COCO_PERSON_WITH_REDUNDANT_SKELETON
         elif head_name in ('omp6', 'omps6'):
@@ -108,7 +111,8 @@ def factory_head(head_name, square_length, stride):
         else:
             raise Exception('unknown skeleton type of head')
 
-        LOG.info('selected encoder: Offset for %s with %d limb connections', head_name, len(OffsetMaps.skeleton))
+        LOG.info('selected encoder: Offset for %s of stride %d computed by %d limb connections',
+                 head_name, stride, len(OffsetMaps.skeleton))
         return OffsetMaps(square_length, stride)
         # 构造并返回Paf，用于生成ground truth paf
     raise Exception('unknown head to create an encoder: {}'.format(head_name))
