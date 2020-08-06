@@ -76,7 +76,7 @@ class LimbsCollect(object):
                   'input size of offmaps: %d * %d ',
                   hmps_hr.shape[2], hmps_hr.shape[3],
                   offs_hr.shape[2], offs_hr.shape[3])
-        start_time = time.time()
+        start_time = time.time()  # fixme: 添加cuda 因异步运行的造成的统计时间问题处理
         # ########################################################################
         # ################ get all information for all limb endpoints ############
         # ########################################################################

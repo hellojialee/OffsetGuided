@@ -1,6 +1,7 @@
 import logging
 import re
 import time
+import argparse
 import torch
 import numpy as np
 import multiprocessing
@@ -14,12 +15,13 @@ from config.coco_data import (COCO_KEYPOINTS,
 LOG = logging.getLogger(__name__)
 
 
-class Processor(object):
+class PostProcess(object):
     def __init__(self, batch_size,
                  hmp_stride, off_stride,
                  keypoints, skeleton,
                  limb_collector, limb_grouper,
-                 hmp_index=0, omp_index=1):
+                 hmp_index=0, omp_index=1, feat_stage=-1):
+        super(PostProcess, self).__init__()
         self.batch_size = batch_size
         self.hmp_stride = hmp_stride
         self.off_stride = off_stride
@@ -29,25 +31,32 @@ class Processor(object):
         self.limb_group = limb_grouper
         self.hmp_index = hmp_index
         self.omp_index = omp_index
+        self.feat_stage = feat_stage
+        LOG.info('use the inferred feature maps at stage %d, '
+                 'heatmap index is %d, offsetmap index is %d, ' 
+                 'parallel execution of GreedyGroup in Pools with %d workers',
+                 feat_stage, hmp_index, omp_index, batch_size)
         self.worker_pool = multiprocessing.Pool(batch_size)
 
-    def generate_poses(self, features):
+    def __call__(self, features):
         # input feature maps regress by the network
         out_hmps, out_bghmp = features[self.hmp_index]
 
         out_offsets, out_spreads, out_scales = features[self.omp_index]
 
         # use the inferred heatmaps at the last stage/stack
-        hmps = out_hmps[-1]
-        offs = out_offsets[-1]
-        scmps = out_scales[-1]
+        hmps = out_hmps[self.feat_stage]
+        offs = out_offsets[self.feat_stage]
+        scmps = out_scales[self.feat_stage]
 
         hmps = torch.nn.functional.interpolate(
             hmps, scale_factor=self.hmp_stride, mode="bicubic")
         offs = torch.nn.functional.interpolate(
             offs, scale_factor=self.off_stride, mode="bicubic")
+
         # convert torch.Tensor to numpy.ndarray
         limbs = self.limb_collect.generate_limbs(hmps, offs, scmps).cpu().numpy()
+        # put grouping into Pools
         batch_poses = self.worker_pool.starmap(
             self.limb_group.group_skeletons, zip(limbs))
 
@@ -62,10 +71,11 @@ def boolean_string(s):
 
 def decoder_cli(parser):
     group = parser.add_argument_group('limb collections in post-processing')
-    group.add_argument('--topk', default=40,
+    group.add_argument('--topk', default=48,
                        type=int,
                        help='select the top K responses on each heatmaps, '
-                            'and hence leads to top K limbs of each type')
+                            'and hence leads to top K limbs of each type. '
+                            'A bigger topk may not leads to better performance')
     group.add_argument('--thre-hmp', default=0.08,
                        type=float,
                        help='candidate kepoints below this response value '
@@ -73,6 +83,8 @@ def decoder_cli(parser):
     group.add_argument('--min-len', default=3,
                        type=float,
                        help='length in pixels, clamp the candidate limbs of zero length to min_len')
+    group.add_argument('--feat-stage', default=-1, type=int,
+                       help='use the inferred feature maps at this stage to generate results')
 
     group = parser.add_argument_group('greedy grouping in post-processing')
     group.add_argument('--person-thre', default=0.08,
@@ -88,33 +100,6 @@ def decoder_cli(parser):
     group.add_argument('--use-scale', default=True, type=boolean_string,
                        help='use the inferred keypoint scales as the criterion '
                             'to keep limbs (keypoint pairs)')
-
-
-def decoder_factory(args):
-    # [keypoints, skeletons]
-    metadic = {}
-    for hd_name, stride in zip(args.headnets, args.strides):
-        metadic.update(parse_heads(hd_name, stride))
-
-    limb_handler = decoder.LimbsCollect(metadic['hmp_stride'],
-                                        metadic['omp_stride'],
-                                        topk=args.topk,
-                                        thre_hmp=args.thre_hmp,
-                                        min_len=args.min_len,
-                                        include_scale=args.include_scale,
-                                        keypoints=metadic['keypoints'],
-                                        skeleton=metadic['skeleton'])
-
-    skeleton_grouper = decoder.GreedyGroup(args.person_thre,
-                                  sort_dim=args.sort_dim,
-                                  dist_max=args.dist_max,
-                                  use_scale=args.use_scale,
-                                  keypoints=metadic['keypoints'],
-                                  skeleton=metadic['skeleton'])
-
-    return Processor(args.batch_size, metadic['hmp_stride'], metadic['omp_stride'],
-                     keypoints=metadic['keypoints'], skeleton=metadic['skeleton'],
-                     limb_collector=limb_handler, limb_grouper=skeleton_grouper)
 
 
 def parse_heads(head_name, stride):
@@ -158,7 +143,35 @@ def parse_heads(head_name, stride):
     raise Exception('unknown head to create an encoder: {}'.format(head_name))
 
 
-import argparse
+def decoder_factory(args):
+    temp_dic = {}  # keypoins and  skeleton
+    for hd_name, stride in zip(args.headnets, args.strides):
+        temp_dic.update(parse_heads(hd_name, stride))
+
+    limb_handler = decoder.LimbsCollect(temp_dic['hmp_stride'],
+                                        temp_dic['omp_stride'],
+                                        topk=args.topk,
+                                        thre_hmp=args.thre_hmp,
+                                        min_len=args.min_len,
+                                        include_scale=args.include_scale,
+                                        keypoints=temp_dic['keypoints'],
+                                        skeleton=temp_dic['skeleton'])
+
+    skeleton_grouper = decoder.GreedyGroup(args.person_thre,
+                                           sort_dim=args.sort_dim,
+                                           dist_max=args.dist_max,
+                                           use_scale=args.use_scale,
+                                           keypoints=temp_dic['keypoints'],
+                                           skeleton=temp_dic['skeleton'])
+
+    return PostProcess(args.batch_size,
+                       temp_dic['hmp_stride'],
+                       temp_dic['omp_stride'],
+                       keypoints=temp_dic['keypoints'],
+                       skeleton=temp_dic['skeleton'],
+                       limb_collector=limb_handler,
+                       limb_grouper=skeleton_grouper,
+                       feat_stage=args.feat_stage)
 
 
 def debug_parse_args():
@@ -188,5 +201,5 @@ if __name__ == '__main__':
     args.include_scale = False
 
     processor = decoder_factory(args)
-    poses = processor.generate_poses()
+    poses = processor.__call__()
     t = 2

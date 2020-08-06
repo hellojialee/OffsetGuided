@@ -57,7 +57,9 @@ def demo_cli():
     parser.add_argument('--show-hmp-idx', default=None, type=int, metavar='N',
                         help='show the heatmap and locations of keypoints of current type')
     parser.add_argument('--show-all-limbs', action='store_true', default=False,
-                        help='show all candidate limb connecitons')
+                        help='show all candidate limb connections')
+    parser.add_argument('--show-detected-poses', action='store_true', default=False,
+                        help='show the final results')
 
     group = parser.add_argument_group('apex configuration')
     group.add_argument("--local_rank", default=0, type=int)
@@ -124,14 +126,16 @@ def main():
         model, _, start_epoch, best_loss, _ = models.networks.load_model(
             model, args.checkpoint_whole, optimizer=None, resume_optimizer=False,
             drop_layers=False, load_amp=False)
-    # Initialize Amp.  Amp accepts either values or strings for the optional override arguments,
-    # for convenient interpretation with argparse.
-    model = amp.initialize(model,
-                           opt_level=args.opt_level,
-                           keep_batchnorm_fp32=args.keep_batchnorm_fp32,
-                           loss_scale=args.loss_scale)
 
     processor = decoder.decoder_factory(args)
+
+    # Initialize Amp.  Amp accepts either values or strings for the optional override arguments,
+    # for convenient interpretation with argparse.
+    # make processor as Module and wrap it 测试后发现没有加速效果
+    [model] = amp.initialize([model],  # , processor
+                             opt_level=args.opt_level,
+                             keep_batchnorm_fp32=args.keep_batchnorm_fp32,
+                             loss_scale=args.loss_scale)
 
     # ############################# Train and Validate #############################
     for epoch in range(start_epoch, start_epoch + args.epochs):
@@ -172,23 +176,26 @@ def test(val_loader, model, criterion, epoch, processor):
                                zip(args.lambdas, multi_losses)]
             loss = sum(weighted_losses)  # args.lambdas defined in models.factory
 
-        batch_poses = processor.generate_poses(outputs)
-        image_poses = batch_poses[3]
+        # post-processing for generating individual poses
+        batch_poses = processor(outputs)
 
-        image = images.cpu().numpy()[3, ...].transpose((1, 2, 0))  # the first image
-        image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
-        skeleton = encoder.OffsetMaps.skeleton
-        keypoint_painter = show.KeypointPainter(
-            show_box=False,
-            # color_connections=True, linewidth=5,
-        )
-        with show.image_canvas(image,
-                               # output_path + '.keypoints.png',
-                               show=True,
-                               # fig_width=args.figure_width,
-                               # dpi_factor=args.dpi_factor
-                               ) as ax:
-            keypoint_painter.keypoints(ax, image_poses[:, :, :3], skeleton=skeleton)
+        if args.show_detected_poses:
+            image_poses = batch_poses[0]
+
+            image = images.cpu().numpy()[0, ...].transpose((1, 2, 0))  # the first image
+            image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
+            skeleton = encoder.OffsetMaps.skeleton
+            keypoint_painter = show.KeypointPainter(
+                show_box=False,
+                # color_connections=True, linewidth=5,
+            )
+            with show.image_canvas(image,
+                                   # output_path + '.keypoints.png',
+                                   show=True,
+                                   # fig_width=args.figure_width,
+                                   # dpi_factor=args.dpi_factor
+                                   ) as ax:
+                keypoint_painter.keypoints(ax, image_poses[:, :, :3], skeleton=skeleton)
 
         LOG.info({
             'type': f'validate-at-rank{args.local_rank}',
@@ -250,30 +257,30 @@ def test(val_loader, model, criterion, epoch, processor):
             t2 = time.time() - t0
             LOG.info('keypoint detection and pairing time: %.6f', t2)
 
-            # for ltype_i, connects in enumerate(limb):
-            #     xyv1 = connects[:, 0:3]
-            #     xyv2 = connects[:, 3:6]
-            #     len_delta = connects[:, -3]
-            #     for i in range(len(xyv1)):
-            #         if xyv1[i, 0] > 0 and xyv2[i, 0] > 0 and len_delta[i] <= 10:
-            #             x1, y1 = xyv1[i, :2].tolist()
-            #             x2, y2 = xyv2[i, :2].tolist()
-            #             plt.plot([x1, x2], [-y1, -y2], color='r')
-            #             plt.scatter([x1, x2], [-y1, -y2], color='g')
-            #             plt.xlim((0, args.square_length))
-            #             plt.ylim((-args.square_length, 0))
-            # plt.title('all candidate limbs')
-            # plt.show()
+            for ltype_i, connects in enumerate(limbs[0]):
+                xyv1 = connects[:, 0:3]
+                xyv2 = connects[:, 3:6]
+                len_delta = connects[:, 8]
+                for i in range(len(xyv1)):
+                    if xyv1[i, 0] > 0 and xyv2[i, 0] > 0 and len_delta[i] <= 10:
+                        x1, y1 = xyv1[i, :2].tolist()
+                        x2, y2 = xyv2[i, :2].tolist()
+                        plt.plot([x1, x2], [-y1, -y2], color='r')
+                        plt.scatter([x1, x2], [-y1, -y2], color='g')
+                        plt.xlim((0, args.square_length))
+                        plt.ylim((-args.square_length, 0))
+            plt.title('all candidate limbs')
+            plt.show()
 
-            assemble = decoder.GreedyGroup(0.1, use_scale=True, sort_dim=2)
-            t0 = time.time()
-            # limbs_list = [(image_limb,) for i, image_limb in enumerate(limbs)]  # each element must be a tuple
-            # starmap blocks the main process to wait all pools, while starmap_async is only little faster
-            batch_poses = worker_pool.starmap(assemble.group_skeletons, zip(limbs))
-            #
-            image_poses = batch_poses[3]
-            t1 = time.time() - t0
-            LOG.info('\nGreedy grouping time: %.6f\n %d person poses', t1, len(image_poses))
+            # assemble = decoder.GreedyGroup(0.1, use_scale=True, sort_dim=2)
+            # t0 = time.time()
+            # # limbs_list = [(image_limb,) for i, image_limb in enumerate(limbs)]  # each element must be a tuple
+            # # starmap blocks the main process to wait all pools, while starmap_async is only little faster
+            # batch_poses = worker_pool.starmap(assemble.group_skeletons, zip(limbs))
+            # #
+            # image_poses = batch_poses[3]
+            # t1 = time.time() - t0
+            # LOG.info('\nGreedy grouping time: %.6f\n %d person poses', t1, len(image_poses))
 
             # for pose_idx, pose in enumerate(image_poses):
             #     xyvs = pose[:, :3]
@@ -284,22 +291,6 @@ def test(val_loader, model, criterion, epoch, processor):
             #             plt.ylim((-args.square_length, 0))
             # plt.title('output of greedy assignment algorithm')
             # plt.show()
-
-            # ############ visualizers
-            image = images.cpu().numpy()[3, ...].transpose((1, 2, 0))  # the first image
-            image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
-            skeleton = encoder.OffsetMaps.skeleton
-            keypoint_painter = show.KeypointPainter(
-                show_box=False,
-                # color_connections=True, linewidth=5,
-            )
-            with show.image_canvas(image,
-                                   # output_path + '.keypoints.png',
-                                   show=True,
-                                   # fig_width=args.figure_width,
-                                   # dpi_factor=args.dpi_factor
-                                   ) as ax:
-                keypoint_painter.keypoints(ax, image_poses[:, :, :3], skeleton=skeleton)
 
         if isinstance(args.show_limb_idx, int):
             hmps = outputs[0][0][1].cpu().numpy()
