@@ -87,11 +87,11 @@ class GreedyGroup(object):
 
             # suppose there are M pose skeletons, then the expanded shape is (M, K, 2)
             # apart from repeat, we can also use numpy array broadcast
-            jIDtab_expand = np.expand_dims(jIDtab, axis=1)  #.repeat(kk, axis=1)  # (M, K, 2)
-            sub_scores_expand = np.expand_dims(sub_scores, axis=1)  #.repeat(kk, axis=1)  # (M, K, 2)
+            jIDtab_expand = np.expand_dims(jIDtab, axis=1)  # .repeat(kk, axis=1)  # (M, K, 2)
+            sub_scores_expand = np.expand_dims(sub_scores, axis=1)  # .repeat(kk, axis=1)  # (M, K, 2)
 
-            limb_inds_expand = np.expand_dims(limb_inds, axis=0)  #.repeat(mm, axis=0)  # (M, K, 2)
-            limb_scores_expand = np.expand_dims(limb_scores, axis=0)  #.repeat(mm, axis=0)  # (M, K, 2)
+            limb_inds_expand = np.expand_dims(limb_inds, axis=0)  # .repeat(mm, axis=0)  # (M, K, 2)
+            limb_scores_expand = np.expand_dims(limb_scores, axis=0)  # .repeat(mm, axis=0)  # (M, K, 2)
 
             mask_sum = np.sum((jIDtab_expand.astype(int) == limb_inds_expand.astype(int)),
                               axis=-1)  # (M, K)
@@ -128,8 +128,10 @@ class GreedyGroup(object):
             # ######### merge the subsets belonging to the same person skeleton #######
             # ########################################################################
             if mm >= 2:
-                Msubset_expand = np.expand_dims(subset[..., -1], axis=1)   #.repeat(mm, axis=1)  # (M, M, 17) or (M, N, 17)
-                Nsubset_expand = np.expand_dims(subset[..., -1], axis=0)   #.repeat(mm, axis=0)  # (M, M, 17) or (M, N, 17)
+                Msubset_expand = np.expand_dims(subset[..., -1],
+                                                axis=1)  # .repeat(mm, axis=1)  # (M, M, 17) or (M, N, 17)
+                Nsubset_expand = np.expand_dims(subset[..., -1],
+                                                axis=0)  # .repeat(mm, axis=0)  # (M, M, 17) or (M, N, 17)
                 merge_mask_sum = np.sum((Msubset_expand.astype(int) == Nsubset_expand.astype(int))
                                         & (Msubset_expand.astype(int) != -1),  # & (Nsubset_expand.astype(int) != -1)
                                         axis=-1)  # (M, M)
@@ -184,6 +186,7 @@ class GreedyGroup(object):
         subset = np.delete(subset, delete_list, axis=0)
         sort_inds = sorted(range(len(scores_list)), key=lambda k: scores_list[k], reverse=True)
         subset = subset[sort_inds]
+        subset[subset == -1] = 0
         LOG.debug('delete and sort the poses: %.6fs', time.time() - t0)
         return subset
 

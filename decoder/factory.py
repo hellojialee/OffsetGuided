@@ -38,7 +38,7 @@ class PostProcess(object):
                  feat_stage, hmp_index, omp_index, batch_size)
         self.worker_pool = multiprocessing.Pool(batch_size)
 
-    def __call__(self, features):
+    def generate_poses(self, features):
         # input feature maps regress by the network
         out_hmps, out_bghmp = features[self.hmp_index]
 
@@ -201,5 +201,5 @@ if __name__ == '__main__':
     args.include_scale = False
 
     processor = decoder_factory(args)
-    poses = processor.__call__()
+    poses = processor.generate_poses()
     t = 2

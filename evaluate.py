@@ -1,4 +1,5 @@
 """Evaluate the one-scale performance on MSCOCO dataset"""
+import os
 import argparse
 import logging
 import cv2
@@ -6,9 +7,11 @@ import matplotlib.pyplot as plt
 import time
 import datetime
 import numpy as np
+import json
 import torch
 import torchvision
-
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 import data
 import transforms
 import models
@@ -76,11 +79,7 @@ def demo_cli():
     return args
 
 
-def main():
-    global best_loss, args
-    best_loss = float('inf')
-    args = demo_cli()
-
+def run_images(resFile):
     print(f"\nopt_level = {args.opt_level}")
     print(f"keep_batchnorm_fp32 = {args.keep_batchnorm_fp32}")
     print(f"CUDNN VERSION: {torch.backends.cudnn.version()}\n")
@@ -141,6 +140,8 @@ def main():
 
     model.eval()
 
+    results_keypoints = []
+
     batch_time = AverageMeter()
     end = time.time()
     for batch_idx, (images, annos, metas) in enumerate(val_loader):
@@ -151,13 +152,33 @@ def main():
             outputs = model(images)  # outputs of multiple headnets
 
         # post-processing for generating individual poses
-        batch_poses = processor(outputs)
+        batch_poses = processor.generate_poses(outputs)
 
         # #########################################################################
-        # ############# inverse the keypoint into original image space ############
+        # ############# inverse the keypoint into the original image space ############
         # #########################################################################
         for index, (image_poses, image_meta) in enumerate(zip(batch_poses, metas)):
-            batch_poses[index] = preprocess.annotations_inverse(image_poses, image_meta)
+            subset = preprocess.annotations_inverse(image_poses, image_meta)
+            batch_poses[index] = subset
+
+            image_id = image_meta['image_id']
+
+            for i, person in enumerate(subset.astype(float)):  # last dim of subset: [x, y, v, s, limb_score, ind]
+                keypoints_list = []
+                v = []
+                for xyv in person[:, :3]:
+                    v.append(xyv[2])
+                    if xyv[2] > 0:
+                        keypoints_list += [xyv[0], xyv[1], 1]
+                    else:
+                        keypoints_list += [0, 0, 1]
+
+                results_keypoints.append({
+                    'image_id': image_id,
+                    'category_id': 1,  # person category
+                    'keypoints': keypoints_list,
+                    'score': sum(v) / len(v),
+                })
 
         if args.show_detected_poses:
             image_poses = batch_poses[0]
@@ -192,6 +213,47 @@ def main():
                 args.world_size * args.batch_size / batch_time.avg,
                 batch_time=batch_time))
 
+    json.dump(results_keypoints, open(resFile, 'w'))
+
+
+def validation(dump_name, validation_ids=None, dataset='val2017'):
+    annType = 'keypoints'
+    prefix = 'person_keypoints'
+
+    dataDir = 'data/link2COCO2017'
+
+    # # # #############################################################################
+    # For evaluation on validation set
+    annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
+    print(annFile)
+    cocoGt = COCO(annFile)
+
+    if validation_ids == None:
+        validation_ids = cocoGt.getImgIds(catIds=cocoGt.getCatIds(catNms=['person']))[:args.n_images_val]
+    # # #############################################################################
+
+    # #############################################################################
+    # For evaluation on test-dev set
+    # annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
+    # cocoGt = COCO(annFile)
+    # validation_ids = cocoGt.getImgIds()
+    # #############################################################################
+
+    resFile = '%s/results/%s_%s_%s_results.json'
+    resFile = resFile % (dataDir, prefix, dataset, dump_name)
+    print('the path of detected keypoint file is: ', resFile)
+    os.makedirs(os.path.dirname(resFile), exist_ok=True)
+
+    run_images(resFile)
+
+    cocoDt = cocoGt.loadRes(resFile)
+    cocoEval = COCOeval(cocoGt, cocoDt, annType)
+    cocoEval.params.imgIds = validation_ids
+    cocoEval.evaluate()
+    cocoEval.accumulate()
+    cocoEval.summarize()
+    return cocoEval
+
 
 if __name__ == '__main__':
     log_level = logging.INFO  # logging.DEBUG
@@ -199,5 +261,10 @@ if __name__ == '__main__':
     logging.basicConfig(
         level=log_level,
     )
+    global best_loss, args
+    best_loss = float('inf')
+    args = demo_cli()
 
-    main()
+    eval_result_original = validation(dump_name='hourglass104_focal_epoch_70_640_input_1scale',
+                                      dataset='val2017')  # 'val2017'
+    print('over!')

@@ -176,7 +176,7 @@ def test(val_loader, model, criterion, epoch, processor):
             loss = sum(weighted_losses)  # args.lambdas defined in models.factory
 
         # post-processing for generating individual poses
-        batch_poses = processor(outputs)
+        batch_poses = processor.generate_poses(outputs)
 
         if args.show_detected_poses:
             image_poses = batch_poses[0]
