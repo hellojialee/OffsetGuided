@@ -16,6 +16,6 @@ class RandomApply(Preprocess):
         self.probability = probability
 
     def __call__(self, image, anns, meta, mask_miss):
-        if random.uniform(0, 1) < self.probability:
+        if random.uniform(0, 1) > self.probability:
             return image, anns, meta, mask_miss
         return self.transform(image, anns, meta, mask_miss)

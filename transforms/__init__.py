@@ -14,12 +14,10 @@ import torchvision
 
 from .annotations import AnnotationJitter, NormalizeAnnotations
 from .compose import Compose
-from .crop import Crop
 from .image import Blur, ImageTransform, JpegCompression, ColorTint
-from .hflip import HFlip
-from .pad import CenterPad
+from .pad import CenterPad, RightDownPad
 from .random import RandomApply
-from .scale import RescaleAbsolute, RescaleRelative
+from .scale import RescaleAbsolute
 from .affine import WarpAffineTransforms
 from .affine import FixedAugParams
 

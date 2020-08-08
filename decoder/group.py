@@ -41,7 +41,10 @@ class GreedyGroup(object):
         Group all candidate limbs into individual human poses.
 
         Args:
-        limbs (np.ndarray): (L, K, 10), includes all limbs in the same image.
+            limbs (np.ndarray): (L, K, 10), includes all limbs in the same image.
+
+        Returns:
+            subset of keypoints (np.ndarray): shape [M * [ 17 * [x, y, v, s, limb_score, ind]]]
         """
         assert len(limbs) == len(self.skeleton
                                  ), 'check the skeleton config and input limbs Tensor'

@@ -18,6 +18,7 @@ import models
 import logs
 from visualization import show
 import decoder
+from utils.util import AverageMeter
 
 try:
     from apex.parallel import DistributedDataParallel as DDP
@@ -157,8 +158,6 @@ def test(val_loader, model, criterion, epoch, processor):
     batch_time = AverageMeter()
     losses = AverageMeter()
     end = time.time()
-
-    worker_pool = multiprocessing.Pool(args.batch_size)  # #  # default: multiprocessing.cpu_count()
 
     for batch_idx, (images, annos, metas) in enumerate(val_loader):
 
@@ -323,26 +322,6 @@ def test(val_loader, model, criterion, epoch, processor):
                 args.world_size * args.batch_size / batch_time.avg,
                 batch_time=batch_time,
                 loss=losses))
-
-
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-
-    def __init__(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-
-def pool_callback():
-    pass
 
 
 if __name__ == '__main__':

@@ -195,7 +195,7 @@ def basenet_factory(basenet_name):
         basenet_name:
 
     Returns:
-        tuple: BaseNetwork, n_stacks, stride, oup_dim
+        tuple: BaseNetwork, n_stacks, stride, max_stride, oup_dim
 
     """
     assert basenet_name in ['hourglass104', 'hourglass4stage'], \
@@ -203,11 +203,11 @@ def basenet_factory(basenet_name):
 
     if 'hourglass104' in basenet_name:
         model = Hourglass104(None, 2)
-        return model, 2, 4, 256
+        return model, 2, 4, 128, 256
 
     if 'hourglass52' in basenet_name:
         model = Hourglass104(None, 1)
-        return model, 1, 4, 256
+        return model, 1, 4, 64, 256
 
     if 'hourglass4stage' in basenet_name:
         class IMHNOpt:

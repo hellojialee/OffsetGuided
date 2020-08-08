@@ -110,6 +110,7 @@ class CocoKeypoints(torch.utils.data.Dataset):
             'dataset_index': index,
             'image_id': image_id,
             'file_name': image_info['file_name'],
+            'image_path': image_path,
         }
 
         if 'flickr_url' in image_info:

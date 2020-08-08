@@ -115,7 +115,7 @@ class OffsetMapGenerator(object):
         for limb_id, (fr, to) in enumerate(self.skeleton):
             visible_from = joints[:, fr, 2] > 0  # keypoint is annotated
             visible_to = joints[:, to, 2] > 0
-            visible = visible_from & visible_to
+            visible = visible_from & visible_to  # only annotated keypoints generate labels!
 
             self.put_guide_offsets(feature_maps, limb_id,
                                    joints[visible, fr, :], joints[visible, to, :],

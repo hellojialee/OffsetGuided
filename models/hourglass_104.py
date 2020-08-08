@@ -395,14 +395,12 @@ def load_model(model, model_path, optimizer=None, resume=False,
 if __name__ == '__main__':
     # for debug
 
-    from models import save_model
-
     model = get_large_hourglass_net(None, None, None)
     model.eval()
 
     # Notice, hourglass-104 down-samples the input 5 TIMES! 512*512-->4*4-->512*512
-    # from torchsummary import summary
-    # summary(model, (3, 512, 512), device='cpu')
+    from torchsummary import summary
+    summary(model, (3, 640, 512), batch_size=2, device='cpu')
 
     img = torch.rand(1, 3, 512, 512)
     out = model(img)

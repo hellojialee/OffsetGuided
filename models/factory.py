@@ -39,6 +39,8 @@ def net_cli(parser):
                        help='rations of the input to the output of basenet, '
                             'also the strides of all sub headnets. '
                             'Also, they determin the strides in encoder and decoder')
+    group.add_argument('--max-stride', default=128, type=int, choices=[64, 128],
+                       help='the max down-sampling stride through the network. ')
     group.add_argument('--include-spread', default=False, action='store_true',
                        help='add conv layers to regress the spread_b '
                             'of Laplace distribution, you should set it to '
@@ -84,11 +86,12 @@ def model_factory(args):
 
     if 'hourglass' in args.basenet:
         # build the base network
-        basenet, n_stacks, stride, feature_dim = hourglass_from_scratch(
+        basenet, n_stacks, stride, max_stride, feature_dim = hourglass_from_scratch(
             args.basenet, args.pretrained, args.basenet_checkpoint, args.initialize_whole)
 
         # build the head networks
         assert stride == args.strides[0], 'strides mismatch'
+        assert max_stride == args.max_stride, 'please reset the max_stride based on the network manually'
         headnets = heads.headnets_factory(
             args.headnets,
             n_stacks,
@@ -120,7 +123,7 @@ def model_factory(args):
 
 
 def hourglass_from_scratch(base_name, pretrained, basenet_checkpoint, initialize_whole):
-    basenet, n_stacks, stride, feature_channel = networks.basenet_factory(
+    basenet, n_stacks, stride, max_stride, feature_channel = networks.basenet_factory(
         base_name)
     # initialize model params in-place, for not all params are old ones from pre-trained model
     if initialize_whole:
@@ -130,9 +133,9 @@ def hourglass_from_scratch(base_name, pretrained, basenet_checkpoint, initialize
         basenet, _, _, _, _ = networks.load_model(
             basenet, basenet_checkpoint)
 
-    LOG.info('select %s as the backbone, n_stacks=%d, stride=%d, feature_channels=%d',
-             basenet.__class__.__name__, n_stacks, stride, feature_channel)
-    return basenet, n_stacks, stride, feature_channel
+    LOG.info('select %s as the backbone, n_stacks=%d, stride=%d, max_stride=%d, feature_channels=%d',
+             basenet.__class__.__name__, n_stacks, stride, max_stride, feature_channel)
+    return basenet, n_stacks, stride, max_stride, feature_channel
 
 
 def debug_parse_args():

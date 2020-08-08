@@ -8,7 +8,6 @@ import torchvision
 import transforms
 from data import CocoKeypoints
 
-
 LOG = logging.getLogger(__name__)
 
 ANNOTATIONS_TRAIN = 'data/link2COCO2017/annotations/person_keypoints_train2017.json'
@@ -19,6 +18,21 @@ IMAGE_DIR_VAL = 'data/link2COCO2017/val2017'
 ANNOTATIONS_TESTDEV = 'data/link2COCO2017/annotations_trainval_info/image_info_test-dev2017.json'
 ANNOTATIONS_TEST = 'data/link2COCO2017/annotations_trainval_info/image_info_test2017.json'
 IMAGE_DIR_TEST = 'data/link2COCO2017/test2017/'
+
+
+def collate_images_anns_meta(batch):
+    # for more flexible label collection
+    images = torch.utils.data.dataloader.default_collate([b[0] for b in batch])
+    anns = [b[1] for b in batch]
+    metas = [b[2] for b in batch]
+    return images, anns, metas
+
+
+def collate_images_targets_meta(batch):
+    images = torch.utils.data.dataloader.default_collate([b[0] for b in batch])
+    targets = torch.utils.data.dataloader.default_collate([b[1] for b in batch])
+    metas = [b[2] for b in batch]
+    return images, targets, metas
 
 
 class DataPrefetcher(object):
@@ -71,7 +85,7 @@ def data_cli(parser):
                        help='square edge of input images')
     group.add_argument('--flip-prob', default=0.5, type=float,
                        help='the probability to flip the input image')
-    group.add_argument('--max-rotate', default=40, type=float,)
+    group.add_argument('--max-rotate', default=40, type=float, )
     group.add_argument('--min-scale', default=0.7, type=float,
                        help='lower bound of the relative'
                             ' image scale during augmentation')
@@ -82,7 +96,12 @@ def data_cli(parser):
                        help='show the transformed image and keyooints')
 
 
-def dataloader_factory(args, preprocess, target_transforms):
+def dataloader_factory(args, preprocess, target_transforms=None):
+    if target_transforms is None:
+        collate_fn = collate_images_anns_meta
+    else:
+        collate_fn = collate_images_targets_meta
+
     if args.loader_workers is None:
         args.loader_workers = 0
     train_data, val_data = dataset_factory(args, preprocess, target_transforms)
@@ -92,18 +111,20 @@ def dataloader_factory(args, preprocess, target_transforms):
         shuffle=False,  # we control shuffle by args.train_shuffle
         pin_memory=args.pin_memory,
         num_workers=args.loader_workers,
-        drop_last=True,)
+        drop_last=True,
+        collate_fn=collate_fn)
 
     val_loader = torch.utils.data.DataLoader(
         val_data, batch_size=args.batch_size, shuffle=False,
         pin_memory=args.pin_memory,
-        num_workers=args.loader_workers, drop_last=True,)
+        num_workers=args.loader_workers,
+        drop_last=True,
+        collate_fn=collate_fn)
 
     return train_loader, val_loader
 
 
 def dataset_factory(args, preprocess, target_transforms):
-
     train_data = CocoKeypoints(
         img_dir=args.train_image_dir,
         annFile=args.train_annotations,
@@ -145,7 +166,7 @@ if __name__ == '__main__':  # for debug
     data_cli(parser)
     encoder.encoder_cli(parser)
     args = parser.parse_args()
-    args.headnets=['heatmaps', 'offsets']  # NOTICE : call net_cli before encoder_cli!!
+    args.headnets = ['heatmaps', 'offsets']  # NOTICE : call net_cli before encoder_cli!!
     args.include_background = True  # generate the heatmap of background
     args.include_scale = True
 
@@ -164,7 +185,7 @@ if __name__ == '__main__':  # for debug
             batch += 1
 
             image, annos, meta = [v for v in
-                                            data_client.__getitem__(index)]
+                                  data_client.__getitem__(index)]
             # mask_miss[0] from heatmap.py is actually the same as mask_miss[1] from offset.py
             image = image.numpy()
             mask_miss = annos[0][-1].numpy().astype(np.float32)  # bool -> float
@@ -198,6 +219,7 @@ if __name__ == '__main__':  # for debug
         min_scale = 0.7
         max_scale = 1.3
         max_translate = 50
+
 
     preprocess_transformations = [
         transforms.NormalizeAnnotations(),
@@ -234,5 +256,3 @@ if __name__ == '__main__':  # for debug
                         setup="from __main__ import test_augmentation_speed;"
                               "from __main__ import val_client",
                         number=3))  # run for number times  # generate 17 samples per second
-
-

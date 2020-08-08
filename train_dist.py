@@ -15,6 +15,7 @@ import transforms
 import encoder
 import models
 import logs
+from utils.util import AverageMeter
 
 try:
     from apex.parallel import DistributedDataParallel as DDP
@@ -475,22 +476,6 @@ def adjust_learning_rate_cyclic(optimizer, current_epoch, start_epoch,
     lr = round(lr, 8)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
-
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-
-    def __init__(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
 
 
 def reduce_tensor(tensor):

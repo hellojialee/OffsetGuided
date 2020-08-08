@@ -1,7 +1,8 @@
 import copy
 import logging
 import numpy as np
-
+import PIL
+import warnings
 import torchvision
 
 from .preprocess import Preprocess
@@ -9,13 +10,16 @@ from .preprocess import Preprocess
 LOG = logging.getLogger(__name__)
 
 
-class CenterPad(Preprocess):  # FIXME: 用right-bottom pad我认为更好，这样不用对keypoint offset做更改了
+class CenterPad(Preprocess):
     def __init__(self, target_size):
         if isinstance(target_size, int):
             target_size = (target_size, target_size)
         self.target_size = target_size
 
-    def __call__(self, image, anns, meta):
+    def __call__(self, image, anns, meta, mask_miss=None):
+        if mask_miss is not None:
+            warnings.warn('mask_miss transformation is not implemented')
+        image = PIL.Image.fromarray(image)
         meta = copy.deepcopy(meta)
         anns = copy.deepcopy(anns)
 
@@ -25,11 +29,8 @@ class CenterPad(Preprocess):  # FIXME: 用right-bottom pad我认为更好，这�
         LOG.debug('valid area before pad with %s: %s', ltrb, meta['valid_area'])
         meta['valid_area'][:2] += ltrb[:2]
         LOG.debug('valid area after pad: %s', meta['valid_area'])
-
-        for ann in anns:
-            ann['valid_area'] = meta['valid_area']
-
-        return image, anns, meta
+        image = np.asarray(image)
+        return image, anns, meta, mask_miss
 
     def center_pad(self, image, anns):
         w, h = image.size
@@ -55,40 +56,66 @@ class CenterPad(Preprocess):  # FIXME: 用right-bottom pad我认为更好，这�
             image, ltrb, fill=(124, 116, 104))
 
         # pad annotations
-        for ann in anns:
-            ann['keypoints'][:, 0] += ltrb[0]  # x坐标加上图像左侧填充的像素个数
-            ann['keypoints'][:, 1] += ltrb[1]
-            ann['bbox'][0] += ltrb[0]
-            ann['bbox'][1] += ltrb[1]
+        anns[:, :, 0] += ltrb[0]
+        anns[:, :, 1] += ltrb[1]
 
         return image, anns, ltrb
 
 
 class SquarePad(Preprocess):
-    def __call__(self, image, anns, meta):
-        center_pad = CenterPad(max(image.size))
-        return center_pad(image, anns, meta)
+    def __call__(self, image, anns, meta, mask_miss):
+        center_pad = CenterPad(max(image.shape[:2]))
+        return center_pad(image, anns, meta, mask_miss)
 
 
-def padRightDownCorner(img, stride, padValue=128):  # padValue= (124, 116, 104)
-    h = img.shape[0]
-    w = img.shape[1]
+class RightDownPad(Preprocess):
+    def __init__(self, max_stride):
+        """
+        Args:
+            max_stride: the max stride through the whole network
+        """
+        self.max_stride = max_stride
 
-    pad = 4 * [None]
-    pad[0] = 0  # up
-    pad[1] = 0  # left
-    pad[2] = 0 if (h % stride == 0) else stride - (h % stride)  # down
-    pad[3] = 0 if (w % stride == 0) else stride - (w % stride)  # right
+    def __call__(self, image, anns, meta, mask_miss=None):
+        if mask_miss is not None:
+            warnings.warn('mask_miss transformation is not implemented')
+        meta = copy.deepcopy(meta)
+        anns = copy.deepcopy(anns)
 
-    img_padded = img
-    pad_up = np.tile(img_padded[0:1, :, :] * 0 + padValue, (pad[0], 1, 1))  # img_padded[0:1, :] * 0 + padValue  # padValue= (124, 116, 104)
-    img_padded = np.concatenate((pad_up, img_padded), axis=0)
-    # 注意! concatenate 两个数组的顺序很重要
-    pad_left = np.tile(img_padded[:, 0:1, :] * 0 + padValue, (1, pad[1], 1))
-    img_padded = np.concatenate((pad_left, img_padded), axis=1)
-    pad_down = np.tile(img_padded[-2:-1, :, :] * 0 + padValue, (pad[2], 1, 1))
-    img_padded = np.concatenate((img_padded, pad_down), axis=0)
-    pad_right = np.tile(img_padded[:, -2:-1, :] * 0 + padValue, (1, pad[3], 1))
-    img_padded = np.concatenate((img_padded, pad_right), axis=1)
+        image, anns, ltrb = self.corner_pad(image, anns)
+        meta['offset'] -= ltrb[:2]
 
-    return img_padded, pad
+        LOG.debug('valid area before pad with %s: %s', ltrb, meta['valid_area'])
+        meta['valid_area'][:2] += ltrb[:2]
+        LOG.debug('valid area after pad: %s', meta['valid_area'])
+
+        return image, anns, meta, mask_miss
+
+    def corner_pad(self, image, anns):
+        fill = np.array([124, 116, 104], dtype=np.uint8).reshape((1, 1, 3))
+        # if we use right-bottom pad, we don't have to consider keypoint offset
+        h, w = image.shape[:2]
+
+        pad = 4 * [None]
+        pad[0] = 0  # up
+        pad[1] = 0  # left
+        pad[2] = 0 if (h % self.max_stride == 0) else self.max_stride - (h % self.max_stride)  # down
+        pad[3] = 0 if (w % self.max_stride == 0) else self.max_stride - (w % self.max_stride)  # right
+
+        img_padded = image
+        pad_up = np.tile(img_padded[0:1, :, :] * 0 + fill, (pad[0], 1, 1))
+        img_padded = np.concatenate((pad_up, img_padded), axis=0)
+        # notice: do not change the concatenation sequence
+        pad_left = np.tile(img_padded[:, 0:1, :] * 0 + fill, (1, pad[1], 1))
+        img_padded = np.concatenate((pad_left, img_padded), axis=1)
+        pad_down = np.tile(img_padded[-2:-1, :, :] * 0 + fill, (pad[2], 1, 1))
+        img_padded = np.concatenate((img_padded, pad_down), axis=0)
+        pad_right = np.tile(img_padded[:, -2:-1, :] * 0 + fill, (1, pad[3], 1))
+        img_padded = np.concatenate((img_padded, pad_right), axis=1)
+
+        ltrb = (pad[1], pad[0], pad[3], pad[2])
+
+        anns[:, :, 0] += ltrb[0]
+        anns[:, :, 1] += ltrb[1]
+
+        return img_padded, anns, ltrb
