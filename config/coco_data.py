@@ -1,5 +1,10 @@
 """Configurations for keypoint, skeleton and keypoint jitter sigmas"""
 
+coco_mean = [0.40789654, 0.44719302, 0.47026115]
+coco_std = [0.28863828, 0.27408164, 0.27809835]
+
+data_mean = [0.485, 0.456, 0.406]
+data_std = [0.229, 0.224, 0.225]
 
 COCO_PERSON_SKELETON = [
     (0, 1), (0, 2), (1, 2), (1, 3), (2, 4), (5, 6), (4, 6), (3, 5),
@@ -37,23 +42,23 @@ KINEMATIC_TREE_SKELETON = [
 
 
 COCO_KEYPOINTS = [
-    'nose',            # 0
-    'left_eye',        # 1
-    'right_eye',       # 2
-    'left_ear',        # 3
-    'right_ear',       # 4
-    'left_shoulder',   # 5
+    'nose',  # 0
+    'left_eye',  # 1
+    'right_eye',  # 2
+    'left_ear',  # 3
+    'right_ear',  # 4
+    'left_shoulder',  # 5
     'right_shoulder',  # 6
-    'left_elbow',      # 7
-    'right_elbow',     # 8
-    'left_wrist',      # 9
-    'right_wrist',     # 10
-    'left_hip',        # 11
-    'right_hip',       # 12
-    'left_knee',       # 13
-    'right_knee',      # 14
-    'left_ankle',      # 15
-    'right_ankle',     # 16
+    'left_elbow',  # 7
+    'right_elbow',  # 8
+    'left_wrist',  # 9
+    'right_wrist',  # 10
+    'left_hip',  # 11
+    'right_hip',  # 12
+    'left_knee',  # 13
+    'right_knee',  # 14
+    'left_ankle',  # 15
+    'right_ankle',  # 16
 ]
 
 LEFT_INDEX = [i for i, v in enumerate(COCO_KEYPOINTS) if v.startswith('l')]

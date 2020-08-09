@@ -10,6 +10,7 @@ import torch
 import torch.distributed as dist
 import torchvision
 
+import config
 import data
 import transforms
 import encoder

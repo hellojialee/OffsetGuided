@@ -12,6 +12,7 @@ import torch
 import torchvision
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
+import config
 import data
 import transforms
 import models
@@ -33,7 +34,7 @@ except ImportError:
 LOG = logging.getLogger(__name__)
 
 
-def demo_cli():
+def evaluate_cli():
     parser = argparse.ArgumentParser(
         # __doc__: current module's annotation (or module.a_function's annotation)
         description=__doc__,
@@ -79,7 +80,10 @@ def demo_cli():
     return args
 
 
-def run_images(resFile):
+def run_images():
+    result_keypoints = []
+    result_image_ids = []
+
     print(f"\nopt_level = {args.opt_level}")
     print(f"keep_batchnorm_fp32 = {args.keep_batchnorm_fp32}")
     print(f"CUDNN VERSION: {torch.backends.cudnn.version()}\n")
@@ -97,19 +101,15 @@ def run_images(resFile):
             transforms.NormalizeAnnotations(),
             transforms.RescaleAbsolute(args.long_edge),
             transforms.RightDownPad(args.max_stride),
-            transforms.RandomApply(transforms.AnnotationJitter(), 0),
         ]
     else:
         preprocess_transformations = [
             transforms.NormalizeAnnotations(),
             transforms.RescaleAbsolute(args.long_edge),
             transforms.CenterPad(args.long_edge),
-            transforms.RandomApply(transforms.AnnotationJitter(), 0),
         ]
 
     preprocess_transformations += [
-        # transforms.RandomApply(transforms.JpegCompression(), 0.1),
-        transforms.RandomApply(transforms.ColorTint(), 0),
         transforms.ImageTransform(torchvision.transforms.ToTensor()),
         transforms.ImageTransform(
             torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -132,15 +132,13 @@ def run_images(resFile):
 
     # Initialize Amp.  Amp accepts either values or strings for the optional override arguments,
     # for convenient interpretation with argparse.
-    # make processor as Module and wrap it 测试后发现没有加速效果
+    # make processor as Module (rewrite forward method) and wrap it 测试后发现没有加速效果
     [model] = amp.initialize([model],  # , processor
                              opt_level=args.opt_level,
                              keep_batchnorm_fp32=args.keep_batchnorm_fp32,
                              loss_scale=args.loss_scale)
 
     model.eval()
-
-    results_keypoints = []
 
     batch_time = AverageMeter()
     end = time.time()
@@ -162,6 +160,7 @@ def run_images(resFile):
             batch_poses[index] = subset
 
             image_id = image_meta['image_id']
+            result_image_ids.append(image_id)
 
             for i, person in enumerate(subset.astype(float)):  # last dim of subset: [x, y, v, s, limb_score, ind]
                 keypoints_list = []
@@ -173,11 +172,11 @@ def run_images(resFile):
                     else:
                         keypoints_list += [0, 0, 1]
 
-                results_keypoints.append({
+                result_keypoints.append({
                     'image_id': image_id,
                     'category_id': 1,  # person category
                     'keypoints': keypoints_list,
-                    'score': sum(v) / len(v),
+                    'score': sum(v) / len(v),  # todo: person pose scare
                 })
 
         if args.show_detected_poses:
@@ -213,10 +212,10 @@ def run_images(resFile):
                 args.world_size * args.batch_size / batch_time.avg,
                 batch_time=batch_time))
 
-    json.dump(results_keypoints, open(resFile, 'w'))
+    return result_keypoints, result_image_ids
 
 
-def validation(dump_name, validation_ids=None, dataset='val2017'):
+def validation(dump_name, dataset='val2017'):
     annType = 'keypoints'
     prefix = 'person_keypoints'
 
@@ -228,8 +227,6 @@ def validation(dump_name, validation_ids=None, dataset='val2017'):
     print(annFile)
     cocoGt = COCO(annFile)
 
-    if validation_ids == None:
-        validation_ids = cocoGt.getImgIds(catIds=cocoGt.getCatIds(catNms=['person']))[:args.n_images_val]
     # # #############################################################################
 
     # #############################################################################
@@ -244,11 +241,14 @@ def validation(dump_name, validation_ids=None, dataset='val2017'):
     print('the path of detected keypoint file is: ', resFile)
     os.makedirs(os.path.dirname(resFile), exist_ok=True)
 
-    run_images(resFile)
+    results_keypoints, validation_ids = run_images()
 
+    json.dump(results_keypoints, open(resFile, 'w'))
+
+    # ####################  COCO Evaluation ################
     cocoDt = cocoGt.loadRes(resFile)
     cocoEval = COCOeval(cocoGt, cocoDt, annType)
-    cocoEval.params.imgIds = validation_ids
+    cocoEval.params.imgIds = validation_ids  # only part of the person images are evaluated
     cocoEval.evaluate()
     cocoEval.accumulate()
     cocoEval.summarize()
@@ -261,10 +261,11 @@ if __name__ == '__main__':
     logging.basicConfig(
         level=log_level,
     )
+
     global best_loss, args
     best_loss = float('inf')
-    args = demo_cli()
+    args = evaluate_cli()
 
     eval_result_original = validation(dump_name='hourglass104_focal_epoch_70_640_input_1scale',
                                       dataset='val2017')  # 'val2017'
-    print('over!')
+    print('\nEvaluation finished!')

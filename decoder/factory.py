@@ -96,7 +96,7 @@ def decoder_cli(parser):
                             '2th dim means keypoints score, 4th dim means limb score.')
     group.add_argument('--dist-max', default=10, type=float,
                        help='abandon limbs with delta offsets bigger than dist_max, '
-                            'if keypoint scales are unavailable.')
+                            'only useful when keypoint scales are unavailable.')
     group.add_argument('--use-scale', default=True, type=boolean_string,
                        help='use the inferred keypoint scales as the criterion '
                             'to keep limbs (keypoint pairs)')
