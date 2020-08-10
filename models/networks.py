@@ -1,5 +1,5 @@
 import logging
-
+import warnings
 import os
 import sys
 import torch
@@ -28,9 +28,9 @@ def load_model(model, ckpt_path, *, optimizer=None, drop_layers=True,
     start_epoch = 0
     start_loss = float('inf')
     if not os.path.isfile(ckpt_path):
-        print(f'WARRRING!!! \t Current checkpoint file {ckpt_path} DOSE NOT exist!!')
-        print("############# No pre-trained parameters are loaded! #############\n"
-              "######## Please make sure you initialize the model randomly! #####")
+        print(f'WARNING!! ##### Current checkpoint file {ckpt_path} DOSE NOT exist!!#####')
+        warnings.warn("No pre-trained parameters are loaded!"
+                      " Please make sure you initialize the model randomly!")
         # return without loading
         load_amp = False
         return model, optimizer, start_epoch, start_loss, load_amp

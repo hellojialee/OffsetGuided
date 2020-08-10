@@ -16,7 +16,7 @@ import transforms
 import encoder
 import models
 import logs
-from utils.util import AverageMeter
+from utils.util import AverageMeter, adjust_learning_rate
 
 try:
     from apex.parallel import DistributedDataParallel as DDP
@@ -157,7 +157,9 @@ def main():
 
     preprocess_transformations += [
         # transforms.RandomApply(transforms.JpegCompression(), 0.1),
-        transforms.RandomApply(transforms.ColorTint(), 0.12),
+        transforms.RandomApply(transforms.Gray(), 0.01),
+        transforms.RandomApply(transforms.ColorTint(), 0.2),
+
         transforms.ImageTransform(torchvision.transforms.ToTensor()),
         transforms.ImageTransform(
             torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -284,7 +286,8 @@ def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
 
     for batch_idx, (images, annos, metas) in enumerate(train_loader):
         # # ##############  Use fun of 'adjust learning rate' #####################
-        adjust_learning_rate(optimizer, epoch, batch_idx, len(train_loader),
+        adjust_learning_rate(args.learning_rate, args.world_size,
+                             optimizer, epoch, batch_idx, len(train_loader),
                              use_warmup=args.warmup)
         LOG.debug('\nLearning rate at this batch is: %0.9f', optimizer.param_groups[0]['lr'])
         # # ##########################################################
@@ -441,42 +444,6 @@ def test(val_loader, val_sampler, model, criterion, optimizer, epoch):
         with open(os.path.join('./' + args.checkpoint_path, 'log'), 'a+') as f:
             f.write('\tval_loss: {}'.format(losses.avg))  # validation时不要\n换行
             f.flush()
-
-
-def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
-    factor = epoch // 15
-
-    if epoch >= 78:
-        factor = (epoch - 78) // 5
-
-    lr = args.learning_rate * args.world_size * (0.2 ** factor)
-
-    if epoch > 70:  # FIXME
-        lr = 2e-5
-
-    """Warmup the learning rate"""
-    if use_warmup:
-        if epoch < 12:
-            # print('=============>  Using warm-up learning rate....')
-            lr = lr * float(1 + step + epoch * len_epoch) / (
-                    12. * len_epoch)  # len_epoch=len(train_loader)
-
-    # if(args.local_rank == 0):
-    #     print("epoch = {}, step = {}, lr = {}".format(epoch, step, lr))
-
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-
-
-def adjust_learning_rate_cyclic(optimizer, current_epoch, start_epoch,
-                                swa_freqent=5, lr_max=4e-5, lr_min=2e-5):
-    epoch = current_epoch - start_epoch
-
-    lr = lr_max - (lr_max - lr_min) / (swa_freqent - 1) * (
-            epoch - epoch // swa_freqent * swa_freqent)
-    lr = round(lr, 8)
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
 
 
 def reduce_tensor(tensor):

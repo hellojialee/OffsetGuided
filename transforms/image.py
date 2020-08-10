@@ -7,6 +7,7 @@ import scipy
 from scipy import ndimage
 import torch
 import cv2
+import torchvision
 
 from .preprocess import Preprocess
 
@@ -49,6 +50,19 @@ class Blur(Preprocess):
         sigma = self.max_sigma * float(torch.rand(1).item())
         im_np = scipy.ndimage.filters.gaussian_filter(im_np, sigma=(sigma, sigma, 0))
         return im_np, anns, meta, mask_miss
+
+
+class Gray(Preprocess):
+    def __init__(self):
+        self.transform = torchvision.transforms.RandomGrayscale(p=1)
+
+    def __call__(self, image, anns, meta, mask_miss):
+        image = Image.fromarray(image)
+        image = self.transform(image)
+        # image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)  # 单通道？
+        image = np.asarray(image)
+
+        return image, anns, meta, mask_miss
 
 
 class ColorTint(Preprocess):

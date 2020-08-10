@@ -1,0 +1,203 @@
+python3 evaluate.py --help
+usage: evaluate.py [-h] [--logging-output LOGGING_OUTPUT]
+                   [--logging-stdout LOGGING_STDOUT]
+                   [--logging-write LOGGING_WRITE] [--debug] [-q]
+                   [--shut-data-logging]
+                   [--train-annotations TRAIN_ANNOTATIONS]
+                   [--train-image-dir TRAIN_IMAGE_DIR]
+                   [--val-annotations VAL_ANNOTATIONS]
+                   [--val-image-dir VAL_IMAGE_DIR]
+                   [--n-images-train N_IMAGES_TRAIN]
+                   [--n-images-val N_IMAGES_VAL]
+                   [--loader-workers LOADER_WORKERS] [--batch-size BATCH_SIZE]
+                   [--train-shuffle] [--val-shuffle]
+                   [--square-length SQUARE_LENGTH] [--flip-prob FLIP_PROB]
+                   [--max-rotate MAX_ROTATE] [--min-scale MIN_SCALE]
+                   [--max-scale MAX_SCALE] [--max-translate MAX_TRANSLATE]
+                   [--debug-affine-show] [--initialize-whole INITIALIZE_WHOLE]
+                   [--checkpoint-whole CHECKPOINT_WHOLE] [--basenet BASENET]
+                   [--two-scale] [--multi-scale] [--no-pretrain]
+                   [--basenet-checkpoint BASENET_CHECKPOINT]
+                   [--headnets HEADNETS [HEADNETS ...]]
+                   [--strides STRIDES [STRIDES ...]] [--max-stride {64,128}]
+                   [--include-spread] [--include-background] [--include-scale]
+                   [--lambdas LAMBDAS [LAMBDAS ...]]
+                   [--stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]]
+                   [--hmp-loss {l2_loss,focal_l2_loss}]
+                   [--offset-loss {offset_l1_loss,offset_laplace_loss}]
+                   [--sqrt-re] [--scale-loss {scale_l1_loss}] [--ftao FTAO]
+                   [--fgamma FGAMMA] [--lmargin LMARGIN] [--topk TOPK]
+                   [--thre-hmp THRE_HMP] [--min-len MIN_LEN]
+                   [--feat-stage FEAT_STAGE] [--person-thre PERSON_THRE]
+                   [--sort-dim {2,4}] [--dist-max DIST_MAX]
+                   [--use-scale USE_SCALE] [--resume] [--epochs N]
+                   [--checkpoint-path CHECKPOINT_PATH] [--show-limb-idx N]
+                   [--show-hmp-idx N] [--show-all-limbs]
+                   [--show-detected-poses] [--long-edge LONG_EDGE]
+                   [--local_rank LOCAL_RANK] [--opt-level OPT_LEVEL]
+                   [--keep-batchnorm-fp32 KEEP_BATCHNORM_FP32]
+                   [--loss-scale LOSS_SCALE] [--channels-last]
+                   [--print-freq N]
+
+Evaluate the one-scale performance on MSCOCO dataset
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --resume, -r          resume from checkpoint (default: False)
+  --epochs N            number of epochs to train (default: 100)
+  --checkpoint-path CHECKPOINT_PATH, -p CHECKPOINT_PATH
+                        folder path checkpoint storage of the whole pose
+                        estimation model (default: link2checkpoints_storage)
+  --show-detected-poses
+                        show the final results (default: False)
+  --long-edge LONG_EDGE
+                        long edge of input images (default: 640)
+
+logging:
+  --logging-output LOGGING_OUTPUT
+                        path to write the log (default: None)
+  --logging-stdout LOGGING_STDOUT
+                        print the detailed log at stdout stream (default:
+                        False)
+  --logging-write LOGGING_WRITE
+                        write the detailed log into log file (default: True)
+  --debug               print debug messages (default: False)
+  -q, --quiet           only show warning messages or above (default: False)
+  --shut-data-logging   shut up the logging info during data preparing
+                        (default: False)
+
+dataset and loader:
+  --train-annotations TRAIN_ANNOTATIONS
+  --train-image-dir TRAIN_IMAGE_DIR
+  --val-annotations VAL_ANNOTATIONS
+  --val-image-dir VAL_IMAGE_DIR
+  --n-images-train N_IMAGES_TRAIN
+                        number of images to sample from the trains subset
+                        (default: None)
+  --n-images-val N_IMAGES_VAL
+                        number of images to sample from the val subset
+                        (default: None)
+  --loader-workers LOADER_WORKERS
+                        number of workers for data loading (default: 8)
+  --batch-size BATCH_SIZE
+                        batch size (default: 8)
+  --train-shuffle       force the trains dataset shuffle by hand (default:
+                        False)
+  --val-shuffle         force the validate dataset shuffle by hand (default:
+                        False)
+
+training parameters for warp affine:
+  --square-length SQUARE_LENGTH
+                        square edge of input images (default: 512)
+  --flip-prob FLIP_PROB
+                        the probability to flip the input image (default: 0.5)
+  --max-rotate MAX_ROTATE
+  --min-scale MIN_SCALE
+                        lower bound of the relative image scale during
+                        augmentation (default: 0.7)
+  --max-scale MAX_SCALE
+  --max-translate MAX_TRANSLATE
+                        upper bound of shitting the image during augmentation
+                        (default: 50)
+  --debug-affine-show   show the transformed image and keyooints (default:
+                        False)
+
+model configuration:
+  --initialize-whole INITIALIZE_WHOLE
+                        randomly initialize the basenet and headnets, just set
+                        it to True if you are not certain (default: True)
+  --checkpoint-whole CHECKPOINT_WHOLE
+                        the checkpoint pach to the whole model
+                        (basenet+headnets) (default: None)
+
+base network configuration:
+  --basenet BASENET     base network, e.g. hourglass4stage (default:
+                        hourglass104)
+  --two-scale           to be implemented (default: False)
+  --multi-scale         to be implemented (default: False)
+  --no-pretrain         create BaseNet without pretraining (default: True)
+  --basenet-checkpoint BASENET_CHECKPOINT
+                        Path to the pre-trained model and optimizer. (default:
+                        weights/hourglass_104_renamed.pth)
+
+head network configuration:
+  --headnets HEADNETS [HEADNETS ...]
+                        head networks (default: ['hmp', 'omp'])
+  --strides STRIDES [STRIDES ...]
+                        rations of the input to the output of basenet, also
+                        the strides of all sub headnets. Also, they determin
+                        the strides in encoder and decoder (default: [4, 4])
+  --max-stride {64,128}
+                        the max down-sampling stride through the network.
+                        (default: 128)
+  --include-spread      add conv layers to regress the spread_b of Laplace
+                        distribution, you should set it to True if you chose
+                        laplace loss (default: False)
+  --include-background  include the heatmap of background channel (default:
+                        False)
+  --include-scale       add cone layers to regress the keypoint scales in
+                        separate channels (default: False)
+
+loss configuration:
+  --lambdas LAMBDAS [LAMBDAS ...]
+                        learning task scaling factors for hmp_loss,
+                        bg_hmp_loss, offset_loss and scale_loss, directly
+                        multiplied, not averaged (default: [1, 1, 0.01, 1])
+  --stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]
+                        loss weights for different stacks, weighted-sum
+                        averaged (default: [1, 1])
+  --hmp-loss {l2_loss,focal_l2_loss}
+                        loss for heatmap regression (default: focal_l2_loss)
+  --offset-loss {offset_l1_loss,offset_laplace_loss}
+                        loss for offeset regression (default: offset_l1_loss)
+  --sqrt-re             rescale the offset loss using torch.sqrt (default:
+                        False)
+  --scale-loss {scale_l1_loss}
+                        loss for keypoint scale regression (default:
+                        scale_l1_loss)
+  --ftao FTAO           threshold between fore/background in focal L2 loss
+                        during training (default: 0.01)
+  --fgamma FGAMMA       order of scaling factor in focal L2 loss during
+                        training (default: 1)
+  --lmargin LMARGIN     offset length below this value will not be punished
+                        during training (default: 0.1)
+
+limb collections in post-processing:
+  --topk TOPK           select the top K responses on each heatmaps, and hence
+                        leads to top K limbs of each type. A bigger topk may
+                        not leads to better performance (default: 48)
+  --thre-hmp THRE_HMP   candidate kepoints below this response value are moved
+                        outside the image boarder (default: 0.08)
+  --min-len MIN_LEN     length in pixels, clamp the candidate limbs of zero
+                        length to min_len (default: 3)
+  --feat-stage FEAT_STAGE
+                        use the inferred feature maps at this stage to
+                        generate results (default: -1)
+
+greedy grouping in post-processing:
+  --person-thre PERSON_THRE
+                        threshold for pose instance scores. (default: 0.08)
+  --sort-dim {2,4}      sort the person poses by the values at the this
+                        axis. 2th dim means keypoints score, 4th dim means limb
+                        score. (default: 2)
+  --dist-max DIST_MAX   abandon limbs with delta offsets bigger than dist_max,
+                        only useful when keypoint scales are unavailable.
+                        (default: 10)
+  --use-scale USE_SCALE
+                        use the inferred keypoint scales as the criterion to
+                        keep limbs (keypoint pairs) (default: True)
+
+apex configuration:
+  --local_rank LOCAL_RANK
+  --opt-level OPT_LEVEL
+  --keep-batchnorm-fp32 KEEP_BATCHNORM_FP32
+  --loss-scale LOSS_SCALE
+  --channels-last       channel last may lead to 22{'option_strings': ['--
+                        channels-last'], 'dest': 'channels_last', 'nargs': 0,
+                        'const': True, 'default': False, 'type': None,
+                        'choices': None, 'required': False, 'help': 'channel
+                        last may lead to 22% speed up', 'metavar': None,
+                        'container': <argparse._ArgumentGroup object at
+                        0x7f3d99f8ba90>, 'prog': 'evaluate.py'}peed up
+                        (default: False)
+  --print-freq N, -f N  print frequency (default: 10) (default: 10)

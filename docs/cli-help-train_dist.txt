@@ -1,52 +1,44 @@
-python3 train_distributed.py --help
-usage: train_distributed.py [-h] [--logging-output LOGGING_OUTPUT]
-                            [--logging-stdout LOGGING_STDOUT]
-                            [--logging-write LOGGING_WRITE] [--debug] [-q]
-                            [--shut-data-logging]
-                            [--train-annotations TRAIN_ANNOTATIONS]
-                            [--train-image-dir TRAIN_IMAGE_DIR]
-                            [--val-annotations VAL_ANNOTATIONS]
-                            [--val-image-dir VAL_IMAGE_DIR]
-                            [--n-images-train N_IMAGES_TRAIN]
-                            [--n-images-val N_IMAGES_VAL]
-                            [--loader-workers LOADER_WORKERS]
-                            [--batch-size BATCH_SIZE] [--train-shuffle]
-                            [--val-shuffle] [--square-length SQUARE_LENGTH]
-                            [--flip-prob FLIP_PROB] [--max-rotate MAX_ROTATE]
-                            [--min-scale MIN_SCALE] [--max-scale MAX_SCALE]
-                            [--max-translate MAX_TRANSLATE]
-                            [--debug-affine-show]
-                            [--initialize-whole INITIALIZE_WHOLE]
-                            [--checkpoint-whole CHECKPOINT_WHOLE]
-                            [--basenet BASENET] [--two-scale] [--multi-scale]
-                            [--no-pretrain]
-                            [--basenet-checkpoint BASENET_CHECKPOINT]
-                            [--headnets HEADNETS [HEADNETS ...]]
-                            [--strides STRIDES [STRIDES ...]]
-                            [--include-spread] [--include-background]
-                            [--include-scale]
-                            [--lambdas LAMBDAS [LAMBDAS ...]]
-                            [--stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]]
-                            [--hmp-loss {l2_loss,focal_l2_loss}]
-                            [--offset-loss {offset_l1_loss,offset_laplace_loss}]
-                            [--sqrt-re] [--scale-loss {scale_l1_loss}]
-                            [--ftao FTAO] [--fgamma FGAMMA]
-                            [--lmargin LMARGIN]
-                            [--gaussian-clip-thre GAUSSIAN_CLIP_THRE]
-                            [--sigma SIGMA]
-                            [--fill-scale-size FILL_SCALE_SIZE]
-                            [--min_scale MIN_SCALE] [--resume]
-                            [--drop-optim-state] [--freeze] [--drop-layers]
-                            [--epochs N] [--warmup]
-                            [--checkpoint-path CHECKPOINT_PATH]
-                            [--max-grad-norm MAX_GRAD_NORM]
-                            [--local_rank LOCAL_RANK] [--opt-level OPT_LEVEL]
-                            [--no-sync-bn]
-                            [--keep-batchnorm-fp32 KEEP_BATCHNORM_FP32]
-                            [--loss-scale LOSS_SCALE]
-                            [--channels-last CHANNELS_LAST] [--print-freq N]
-                            [--optimizer {sgd,adam}] [--learning-rate LR]
-                            [--momentum M] [--weight-decay W]
+ python3 train_dist.py --help
+usage: train_dist.py [-h] [--logging-output LOGGING_OUTPUT]
+                     [--logging-stdout LOGGING_STDOUT]
+                     [--logging-write LOGGING_WRITE] [--debug] [-q]
+                     [--shut-data-logging]
+                     [--train-annotations TRAIN_ANNOTATIONS]
+                     [--train-image-dir TRAIN_IMAGE_DIR]
+                     [--val-annotations VAL_ANNOTATIONS]
+                     [--val-image-dir VAL_IMAGE_DIR]
+                     [--n-images-train N_IMAGES_TRAIN]
+                     [--n-images-val N_IMAGES_VAL]
+                     [--loader-workers LOADER_WORKERS]
+                     [--batch-size BATCH_SIZE] [--train-shuffle]
+                     [--val-shuffle] [--square-length SQUARE_LENGTH]
+                     [--flip-prob FLIP_PROB] [--max-rotate MAX_ROTATE]
+                     [--min-scale MIN_SCALE] [--max-scale MAX_SCALE]
+                     [--max-translate MAX_TRANSLATE] [--debug-affine-show]
+                     [--initialize-whole INITIALIZE_WHOLE]
+                     [--checkpoint-whole CHECKPOINT_WHOLE] [--basenet BASENET]
+                     [--two-scale] [--multi-scale] [--no-pretrain]
+                     [--basenet-checkpoint BASENET_CHECKPOINT]
+                     [--headnets HEADNETS [HEADNETS ...]]
+                     [--strides STRIDES [STRIDES ...]] [--max-stride {64,128}]
+                     [--include-spread] [--include-background]
+                     [--include-scale] [--lambdas LAMBDAS [LAMBDAS ...]]
+                     [--stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]]
+                     [--hmp-loss {l2_loss,focal_l2_loss}]
+                     [--offset-loss {offset_l1_loss,offset_laplace_loss}]
+                     [--sqrt-re] [--scale-loss {scale_l1_loss}] [--ftao FTAO]
+                     [--fgamma FGAMMA] [--lmargin LMARGIN]
+                     [--gaussian-clip-thre GAUSSIAN_CLIP_THRE] [--sigma SIGMA]
+                     [--fill-scale-size FILL_SCALE_SIZE]
+                     [--min_scale MIN_SCALE] [--resume] [--drop-optim-state]
+                     [--freeze] [--drop-layers] [--epochs N] [--recount-epoch]
+                     [--warmup] [--checkpoint-path CHECKPOINT_PATH]
+                     [--max-grad-norm MAX_GRAD_NORM] [--local_rank LOCAL_RANK]
+                     [--opt-level OPT_LEVEL] [--no-sync-bn]
+                     [--keep-batchnorm-fp32 KEEP_BATCHNORM_FP32]
+                     [--loss-scale LOSS_SCALE] [--channels-last]
+                     [--print-freq N] [--optimizer {sgd,adam}]
+                     [--learning-rate LR] [--momentum M] [--weight-decay W]
 
 Distributed training with Nvidia Apex
 
@@ -60,6 +52,7 @@ optional arguments:
   --drop-layers         drop some layers described in
                         models.networks.load_model (default: False)
   --epochs N            number of epochs to train (default: 100)
+  --recount-epoch       reset the epoch counter to 0 (default: False)
   --warmup              using warm-up learning rate (default: False)
   --checkpoint-path CHECKPOINT_PATH, -p CHECKPOINT_PATH
                         folder path checkpoint storage of the whole pose
@@ -71,6 +64,7 @@ optional arguments:
 
 logging:
   --logging-output LOGGING_OUTPUT
+                        path to write the log (default: None)
   --logging-stdout LOGGING_STDOUT
                         print the detailed log at stdout stream (default:
                         False)
@@ -119,8 +113,8 @@ training parameters for warp affine:
 
 model configuration:
   --initialize-whole INITIALIZE_WHOLE
-                        randomly initialize the basenet and headnets (default:
-                        True)
+                        randomly initialize the basenet and headnets, just set
+                        it to True if you are not certain (default: True)
   --checkpoint-whole CHECKPOINT_WHOLE
                         the checkpoint pach to the whole model
                         (basenet+headnets) (default: None)
@@ -140,7 +134,11 @@ head network configuration:
                         head networks (default: ['hmp', 'omp'])
   --strides STRIDES [STRIDES ...]
                         rations of the input to the output of basenet, also
-                        the strides of all sub headnets (default: [4, 4])
+                        the strides of all sub headnets. Also, they determin
+                        the strides in encoder and decoder (default: [4, 4])
+  --max-stride {64,128}
+                        the max down-sampling stride through the network.
+                        (default: 128)
   --include-spread      add conv layers to regress the spread_b of Laplace
                         distribution, you should set it to True if you chose
                         laplace loss (default: False)
@@ -151,10 +149,11 @@ head network configuration:
 
 loss configuration:
   --lambdas LAMBDAS [LAMBDAS ...]
-                        learning task wights, directly multiply, not averaged
-                        (default: [1, 1, 1, 1])
+                        learning task scaling factors for hmp_loss,
+                        bg_hmp_loss, offset_loss and scale_loss, directly
+                        multiplied, not averaged (default: [1, 1, 0.01, 1])
   --stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]
-                        loss weights of different stacks, weighted-sum
+                        loss weights for different stacks, weighted-sum
                         averaged (default: [1, 1])
   --hmp-loss {l2_loss,focal_l2_loss}
                         loss for heatmap regression (default: focal_l2_loss)
@@ -192,7 +191,14 @@ apex configuration:
   --no-sync-bn          enabling apex sync BN. (default: True)
   --keep-batchnorm-fp32 KEEP_BATCHNORM_FP32
   --loss-scale LOSS_SCALE
-  --channels-last CHANNELS_LAST
+  --channels-last       channel last may lead to 22{'option_strings': ['--
+                        channels-last'], 'dest': 'channels_last', 'nargs': 0,
+                        'const': True, 'default': False, 'type': None,
+                        'choices': None, 'required': False, 'help': 'channel
+                        last may lead to 22% speed up', 'metavar': None,
+                        'container': <argparse._ArgumentGroup object at
+                        0x7fb5bc964240>, 'prog': 'train_dist.py'}peed up
+                        (default: False)
   --print-freq N, -f N  print frequency (default: 10) (default: 10)
 
 optimizer configuration:

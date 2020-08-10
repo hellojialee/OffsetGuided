@@ -37,7 +37,8 @@ class CocoKeypoints(torch.utils.data.Dataset):
     def __init__(self, img_dir, annFile, *,
                  preprocess=None, target_transforms=None,
                  n_images=None,  all_images=False,
-                 all_persons=False, shuffle=False):
+                 all_persons=False, shuffle=False,
+                 debug_mask=False):
         from pycocotools.coco import COCO
         self.img_dir = img_dir
         self.coco = COCO(annFile)
@@ -60,6 +61,7 @@ class CocoKeypoints(torch.utils.data.Dataset):
 
         self.preprocess = preprocess or transforms.EVAL_TRANSFORM
         self.target_transforms = target_transforms
+        self.debug_mask = debug_mask
 
     def filter_for_keypoint_annotations(self):
         """
@@ -104,7 +106,7 @@ class CocoKeypoints(torch.utils.data.Dataset):
         # We use RGB image sequence all through our project.
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         # mask_miss areas: 0, mask_all areas: 255
-        mask_miss, _ = self.mask_mask(image_info, anns)
+        mask_miss, _ = self.mask_mask(image_info, anns, debug_show=self.debug_mask)
 
         meta_init = {
             'dataset_index': index,

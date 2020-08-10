@@ -93,10 +93,10 @@ def decoder_cli(parser):
     group.add_argument('--sort-dim', default=2, choices=[2, 4],
                        type=int,
                        help='sort the person poses by the values at the this axis.'
-                            '2th dim means keypoints score, 4th dim means limb score.')
-    group.add_argument('--dist-max', default=10, type=float,
+                            ' 2th dim means keypoints score, 4th dim means limb score.')
+    group.add_argument('--dist-max', default=20, type=float,
                        help='abandon limbs with delta offsets bigger than dist_max, '
-                            'only useful when keypoint scales are unavailable.')
+                            'only useful when keypoint scales are not used.')
     group.add_argument('--use-scale', default=True, type=boolean_string,
                        help='use the inferred keypoint scales as the criterion '
                             'to keep limbs (keypoint pairs)')

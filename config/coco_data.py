@@ -162,15 +162,15 @@ def draw_skeletons():
     keypoint_painter = show.KeypointPainter(show_box=False, color_connections=True,
                                             markersize=1, linewidth=6)
 
-    with show.canvas('docs/skeleton_coco.png', figsize=(2, 5)) as ax:
+    with show.canvas('../docs/skeleton_coco.png', figsize=(2, 5)) as ax:
         ax.set_axis_off()
         keypoint_painter.keypoints(ax, coordinates, skeleton=COCO_PERSON_SKELETON)
 
-    with show.canvas('docs/skeleton_kinematic_tree.png', figsize=(2, 5)) as ax:
+    with show.canvas('../docs/skeleton_kinematic_tree.png', figsize=(2, 5)) as ax:
         ax.set_axis_off()
         keypoint_painter.keypoints(ax, coordinates, skeleton=KINEMATIC_TREE_SKELETON)
 
-    with show.canvas('docs/skeleton_coco_redundant.png', figsize=(2, 5)) as ax:
+    with show.canvas('../docs/skeleton_coco_redundant.png', figsize=(2, 5)) as ax:
         ax.set_axis_off()
         keypoint_painter.keypoints(ax, coordinates, skeleton=COCO_PERSON_WITH_REDUNDANT_SKELETON)
 

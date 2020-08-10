@@ -53,12 +53,6 @@ def evaluate_cli():
     parser.add_argument('--checkpoint-path', '-p',
                         default='link2checkpoints_storage',
                         help='folder path checkpoint storage of the whole pose estimation model')
-    parser.add_argument('--show-limb-idx', default=None, type=int, metavar='N',
-                        help='draw the vector of limb connection offset and connected keypoints')
-    parser.add_argument('--show-hmp-idx', default=None, type=int, metavar='N',
-                        help='show the heatmap and locations of keypoints of current type')
-    parser.add_argument('--show-all-limbs', action='store_true', default=False,
-                        help='show all candidate limb connections')
     parser.add_argument('--show-detected-poses', action='store_true', default=False,
                         help='show the final results')
     parser.add_argument('--long-edge', default=640, type=int,
@@ -160,17 +154,18 @@ def run_images():
             batch_poses[index] = subset
 
             image_id = image_meta['image_id']
-            result_image_ids.append(image_id)
 
+            # #########################################################################
+            # ############# collect the detected person poses and image ids ###########
+            # #########################################################################
+            result_image_ids.append(image_id)
             for i, person in enumerate(subset.astype(float)):  # last dim of subset: [x, y, v, s, limb_score, ind]
                 keypoints_list = []
                 v = []
                 for xyv in person[:, :3]:
                     v.append(xyv[2])
-                    if xyv[2] > 0:
-                        keypoints_list += [xyv[0], xyv[1], 1]
-                    else:
-                        keypoints_list += [0, 0, 1]
+                    keypoints_list += [xyv[0], xyv[1],
+                                       1 if xyv[0] > 0 or xyv[1] > 0 else 0]
 
                 result_keypoints.append({
                     'image_id': image_id,

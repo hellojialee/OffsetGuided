@@ -1,8 +1,10 @@
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_3_epoch.pth --resume --no-pretrain
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --weight-decay 0 --hmp-loss l2_loss
-CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_68_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0
+python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_158_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --sqrt-re --weight-decay 0
 
 
 python demo_batch.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_158_epoch.pth --resume --sqrt-re --show-limb-idx 9 --show-hmp-idx 7 --show-all-limbs --batch-size 1
+
+python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_158_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --min-scale 0.3 --max-scale 1.8
