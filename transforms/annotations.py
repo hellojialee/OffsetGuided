@@ -30,6 +30,7 @@ class NormalizeAnnotations(Preprocess):
             keypoints[i, :, :3] = np.asarray(ann['keypoints'], dtype=np.float32).reshape(-1, 3)
             keypoints[i, :, 3] = math.sqrt(ann['area']
                                            ) * np.array(COCO_PERSON_SIGMAS)
+        # print('ground truth \n', keypoints)
 
         return keypoints
 
@@ -47,6 +48,7 @@ class NormalizeAnnotations(Preprocess):
                 'hflip': False,
                 'rotate': 0.,
                 'width_height': np.array([w, h]),
+                'original_width_height': np.array([w, h]),
                 'affine3×3mat': np.array([[1., 0., 0],
                                           [0., 1., 0],
                                           [0., 0., 1.]], dtype=np.float32),

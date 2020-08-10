@@ -60,6 +60,7 @@ def _scale(image, anns, meta, mask_miss, target_w, target_h, mode):
     LOG.debug('meta before: %s', meta)
     meta['offset'] *= scale_factors
     meta['scale'] *= scale_factors
+    meta['width_height'] = np.array([target_w, target_h])
     meta['valid_area'][:2] *= scale_factors  # valid_area的编码方式为(x1, y1, w, h)
     meta['valid_area'][2:] *= scale_factors
     LOG.debug('meta after: %s', meta)

@@ -1,4 +1,4 @@
-"""Evaluate the one-scale performance on MSCOCO dataset"""
+"""Simulation for the encoding and decoding process and check the performance on dataset"""
 import os
 import argparse
 import logging
@@ -18,6 +18,7 @@ import transforms
 import models
 import logs
 from visualization import show
+import encoder
 import decoder
 from utils.util import AverageMeter
 
@@ -43,6 +44,7 @@ def evaluate_cli():
 
     logs.cli(parser)
     data.data_cli(parser)
+    encoder.encoder_cli(parser)
     models.net_cli(parser)
     decoder.decoder_cli(parser)
 
@@ -89,19 +91,15 @@ def run_images():
         args.pin_memory = True
 
     args.world_size = 1
+    args.square_length = args.long_edge
 
-    if args.batch_size == 1:
-        preprocess_transformations = [
-            transforms.NormalizeAnnotations(),
-            transforms.RescaleAbsolute(args.long_edge),
-            transforms.RightDownPad(args.max_stride),
-        ]
-    else:
-        preprocess_transformations = [
-            transforms.NormalizeAnnotations(),
-            transforms.RescaleAbsolute(args.long_edge),
-            transforms.CenterPad(args.long_edge),
-        ]
+    preprocess_transformations = [
+        transforms.NormalizeAnnotations(),
+        # transforms.RescaleAbsolute(args.long_edge),
+        transforms.WarpAffineTransforms(args.square_length,
+                                        aug_params=transforms.FixedAugParams()),
+        # transforms.RightDownPad(args.long_edge),
+    ]
 
     preprocess_transformations += [
         transforms.ImageTransform(torchvision.transforms.ToTensor()),
@@ -110,29 +108,11 @@ def run_images():
                                              std=[0.229, 0.224, 0.225])),
     ]
     preprocess = transforms.Compose(preprocess_transformations)
+    target_transform = encoder.encoder_factory(args, args.strides)
 
-    train_loader, val_loader = data.dataloader_factory(args, preprocess)
-
-    model, _ = models.model_factory(args)
-
-    model.cuda()
-
-    if args.resume:
-        model, _, start_epoch, best_loss, _ = models.networks.load_model(
-            model, args.checkpoint_whole, optimizer=None, resume_optimizer=False,
-            drop_layers=False, load_amp=False)
+    train_loader, val_loader = data.dataloader_factory(args, preprocess, target_transform)
 
     processor = decoder.decoder_factory(args)
-
-    # Initialize Amp.  Amp accepts either values or strings for the optional override arguments,
-    # for convenient interpretation with argparse.
-    # make processor as Module (rewrite forward method) and wrap it 测试后发现没有加速效果
-    [model] = amp.initialize([model],  # , processor
-                             opt_level=args.opt_level,
-                             keep_batchnorm_fp32=args.keep_batchnorm_fp32,
-                             loss_scale=args.loss_scale)
-
-    model.eval()
 
     batch_time = AverageMeter()
     end = time.time()
@@ -140,17 +120,17 @@ def run_images():
 
         images = images.cuda(non_blocking=True)
 
-        with torch.no_grad():
-            outputs = model(images)  # outputs of multiple headnets
-
+        anno_heads = [[x.cuda(non_blocking=True) for x in pack] for pack in
+                      annos]
+        features = [[[anno_heads[0][0]], [None]], [[anno_heads[1][0]], [None], [None]]]
         # post-processing for generating individual poses
-        batch_poses = processor.generate_poses(outputs)
+        batch_poses = processor.generate_poses(features)
 
         # #########################################################################
         # ############# inverse the keypoint into the original image space ############
         # #########################################################################
         for index, (image_poses, image_meta) in enumerate(zip(batch_poses, metas)):
-            subset = preprocess.annotations_inverse(image_poses, image_meta)
+            subset = preprocess.affine_keypoint_inverse(image_poses, image_meta)  # todo: change to annotation_inverse
             batch_poses[index] = subset
 
             image_id = image_meta['image_id']
@@ -161,13 +141,15 @@ def run_images():
             result_image_ids.append(image_id)
             # last dim of subset: [x, y, v, s, limb_score, ind]
             subset[:, :, :2] = np.around(subset[:, :, :2], 2)
-            for i, person in enumerate(subset.astype(float)):
+            # print('detection \n', subset.astype(int))
+
+            for i, person in enumerate(subset.astype(float)):  # json cannot write float32
                 keypoints_list = []
                 v = []
                 for xyv in person[:, :3]:
                     v.append(xyv[2])
                     keypoints_list += [xyv[0], xyv[1],
-                                       1 if xyv[0] > 0 or xyv[1] > 0 else 0]
+                                       1 if xyv[0] > 0 and xyv[1] > 0 else 0]
 
                 result_keypoints.append({
                     'image_id': image_id,
@@ -265,4 +247,4 @@ if __name__ == '__main__':
 
     eval_result_original = validation(dump_name='hourglass104_focal_epoch_70_640_input_1scale',
                                       dataset='val2017')  # 'val2017'
-    print('\nEvaluation finished!')
+    print('\ntheoretical performance of our encoding and decoding')

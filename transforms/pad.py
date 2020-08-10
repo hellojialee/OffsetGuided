@@ -25,7 +25,7 @@ class CenterPad(Preprocess):
 
         image, anns, ltrb = self.center_pad(image, anns)
         meta['offset'] -= ltrb[:2]
-
+        meta['width_height'] = np.array(image.size)
         LOG.debug('valid area before pad with %s: %s', ltrb, meta['valid_area'])
         meta['valid_area'][:2] += ltrb[:2]
         LOG.debug('valid area after pad: %s', meta['valid_area'])
@@ -84,7 +84,7 @@ class RightDownPad(Preprocess):
 
         image, anns, ltrb = self.corner_pad(image, anns)
         meta['offset'] -= ltrb[:2]
-
+        meta['width_height'] = np.array([image.shape[1], image.shape[0]])
         LOG.debug('valid area before pad with %s: %s', ltrb, meta['valid_area'])
         meta['valid_area'][:2] += ltrb[:2]
         LOG.debug('valid area after pad: %s', meta['valid_area'])

@@ -10,7 +10,7 @@ class Preprocess(metaclass=ABCMeta):
         """Implementation of preprocess operation."""
 
     @staticmethod
-    def affine_keypoint_inverse(keypoints, meta):  # to be tested and checked
+    def affine_keypoint_inverse(keypoints, meta):  # TODO: to be further checked
         """Inverse transform for WarpAffine augmentation in a single image"""
         keypoints = keypoints.copy()
         M = np.linalg.inv(meta['affine3×3mat'])
@@ -26,7 +26,7 @@ class Preprocess(metaclass=ABCMeta):
         return keypoints
 
     @staticmethod
-    def annotations_inverse(keypoints, meta):
+    def annotations_inverse(keypoints, meta):  # has been checked, it's OK
         """Inversely transform all the person poses in the same scene to the original image space"""
 
         keypoints = copy.deepcopy(keypoints)

@@ -66,8 +66,8 @@ class GreedyGroup(object):
 
             # ######################## remove false limbs ##############################
             # mask out the limbs with low responses which were moved off the image
-            valid = dist_valid & (conns[:, 0] > 0)
-            # & (conns[:, 3] > 0) & (conns[:, 1] > 0) & (conns[:, 4] > 0) # ignore
+            valid = dist_valid & (conns[:, 0] > 0) & (conns[:, 4] > 0) & (
+                    conns[:, 3] > 0) & (conns[:, 1] > 0)  # we can ignore
             conns = conns[valid]  # (K, 11), may be (kk, 11) in which kk<K
 
             # ############ delete limb connections sharing the same keypoint ############
