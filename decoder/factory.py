@@ -9,6 +9,7 @@ import decoder
 from config.coco_data import (COCO_KEYPOINTS,
                               COCO_PERSON_SKELETON,
                               COCO_PERSON_WITH_REDUNDANT_SKELETON,
+                              DENSER_COCO_PERSON_SKELETON,
                               REDUNDANT_CONNECTIONS,
                               KINEMATIC_TREE_SKELETON)
 
@@ -131,9 +132,11 @@ def parse_heads(head_name, stride):
             skeleton = COCO_PERSON_SKELETON  # default selection
         elif head_name in ('omp16',):
             skeleton = KINEMATIC_TREE_SKELETON
-        elif head_name in ('omp29',):
+        elif head_name in ('omp31',):
             skeleton = COCO_PERSON_WITH_REDUNDANT_SKELETON
-        elif head_name in ('omp6', 'omps6'):
+        elif head_name in ('omp44',):
+            skeleton = DENSER_COCO_PERSON_SKELETON
+        elif head_name in ('omp25', 'omps25'):
             skeleton = REDUNDANT_CONNECTIONS
         else:
             raise Exception('unknown skeleton type of head')

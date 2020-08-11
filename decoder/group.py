@@ -141,6 +141,7 @@ class GreedyGroup(object):
                 if len(M_inds):  # merge skeletons belonging to the same person
                     # overlay -1 elements or small scores, and keep the same keypoint info
                     subset[M_inds, :, :] = np.maximum(subset[M_inds, :, :], subset[N_inds, :, :])
+                    # delete the merged old skeletons
                     subset = np.delete(subset, N_inds, axis=0)
 
                 # other cases

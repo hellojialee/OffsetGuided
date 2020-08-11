@@ -150,14 +150,15 @@ def main():
 
     preprocess_transformations = [
         transforms.NormalizeAnnotations(),
+        # to compensate the coordinate shifting during transforms
+        transforms.RandomApply(transforms.AnnotationJitter(shift=1), 0.2),
         transforms.WarpAffineTransforms(args.square_length, aug_params=args,
                                         debug_show=False),
-        # transforms.RandomApply(transforms.AnnotationJitter(), 0.1),
     ]
 
     preprocess_transformations += [
         # transforms.RandomApply(transforms.JpegCompression(), 0.1),
-        transforms.RandomApply(transforms.Gray(), 0.01),
+        transforms.RandomApply(transforms.Gray(), 0.02),
         transforms.RandomApply(transforms.ColorTint(), 0.2),
 
         transforms.ImageTransform(torchvision.transforms.ToTensor()),

@@ -95,10 +95,13 @@ def run_images():
 
     preprocess_transformations = [
         transforms.NormalizeAnnotations(),
-        # transforms.RescaleAbsolute(args.long_edge),
-        transforms.WarpAffineTransforms(args.square_length,
-                                        aug_params=transforms.FixedAugParams()),
-        # transforms.RightDownPad(args.long_edge),
+        # transforms.RandomApply(transforms.AnnotationJitter(shift=1), 0.4),
+        transforms.RescaleAbsolute(args.long_edge),
+        transforms.CenterPad(args.long_edge),
+        # transforms.RightDownPad(args.long_edge)  # CenterPad leads to higher metrics
+        # transforms.WarpAffineTransforms(args.square_length, crop_roi=False,
+        #                                 aug_params=transforms.FixedAugParams()),
+
     ]
 
     preprocess_transformations += [
@@ -130,7 +133,8 @@ def run_images():
         # ############# inverse the keypoint into the original image space ############
         # #########################################################################
         for index, (image_poses, image_meta) in enumerate(zip(batch_poses, metas)):
-            subset = preprocess.affine_keypoint_inverse(image_poses, image_meta)  # todo: change to annotation_inverse
+            # change to affine_keypoint_inverse or annotation_inverse
+            subset = preprocess.annotations_inverse(image_poses, image_meta)
             batch_poses[index] = subset
 
             image_id = image_meta['image_id']
@@ -202,18 +206,18 @@ def validation(dump_name, dataset='val2017'):
 
     # # # #############################################################################
     # For evaluation on validation set
-    annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
-    print(annFile)
-    cocoGt = COCO(annFile)
-
-    # # #############################################################################
+    if dataset == 'val2017':
+        annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
 
     # #############################################################################
     # For evaluation on test-dev set
-    # annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
-    # cocoGt = COCO(annFile)
-    # validation_ids = cocoGt.getImgIds()
-    # #############################################################################
+    elif dataset == 'test2017':
+        annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
+    else:
+        raise Exception('unknown dataset')
+
+    print(annFile)
+    cocoGt = COCO(annFile)
 
     resFile = '%s/results/%s_%s_%s_results.json'
     resFile = resFile % (dataDir, prefix, dataset, dump_name)

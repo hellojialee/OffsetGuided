@@ -10,7 +10,7 @@ class Preprocess(metaclass=ABCMeta):
         """Implementation of preprocess operation."""
 
     @staticmethod
-    def affine_keypoint_inverse(keypoints, meta):  # TODO: to be further checked
+    def affine_keypoint_inverse(keypoints, meta):  # has been checked, it's OK
         """Inverse transform for WarpAffine augmentation in a single image"""
         keypoints = keypoints.copy()
         M = np.linalg.inv(meta['affine3×3mat'])
@@ -31,11 +31,6 @@ class Preprocess(metaclass=ABCMeta):
 
         keypoints = copy.deepcopy(keypoints)
 
-        """
-        should keep the same as in transforms.scale._scale
-        keypoint_sets[:, :, 0] = (keypoint_sets[:, :, 0] + 0.5) / meta['scale'][0] - 0.5
-        keypoint_sets[:, :, 1] = (keypoint_sets[:, :, 1] + 0.5) / meta['scale'][1] - 0.5"""
-
         # in the earlier data transformation time,
         # we firstly resize (scale) and then pad (shift) the image
         keypoints[:, :, 0] += meta['offset'][0]
@@ -43,6 +38,15 @@ class Preprocess(metaclass=ABCMeta):
 
         keypoints[:, :, 0] /= meta['scale'][0]
         keypoints[:, :, 1] /= meta['scale'][1]
+
+        """
+        This part should keep the same as in transforms.scale._scale! 
+        It nearly makes no change in the inference
+        keypoint_sets[:, :, 0] = (keypoint_sets[:, :, 0] + 0.5) / meta['scale'][0] - 0.5
+        keypoint_sets[:, :, 1] = (keypoint_sets[:, :, 1] + 0.5) / meta['scale'][1] - 0.5"""
+        # keypoints[:, :, 0] = (keypoints[:, :, 0] + 0.5) / meta['scale'][0] - 0.5
+        # keypoints[:, :, 1] = (keypoints[:, :, 1] + 0.5) / meta['scale'][1] - 0.5
+
         keypoints[:, :, 3] /= np.sqrt(np.prod(meta['scale']))  # keypoint scales
 
         if meta['hflip']:

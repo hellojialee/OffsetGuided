@@ -36,25 +36,29 @@ def _scale(image, anns, meta, mask_miss, target_w, target_h, mode):
     # I cannot tell where is the coordinate origin of keypoint annotation?
     x_scale = (target_w - 1) / (w - 1)  # (w-1)/(w'-1) not w/w'!
     y_scale = (target_h - 1) / (h - 1)
-    # refer to transforms.annotations.NormalizeAnnotations.normalize_annotations
+    # # refer to transforms.annotations.NormalizeAnnotations.normalize_annotations
     anns[:, :, 0] *= x_scale
     anns[:, :, 1] *= y_scale  # x_scale and y_scale may be different
-    anns[:, :, 3] *= math.sqrt(x_scale * y_scale)  # resize the keypoint scale
 
-    """ 
-    Just ignore the following comments :)
-    通过试验发现，即使最后关键点坐标用floor取整的情况下，上面这种缩放方式和下面这种(在version 0.5中采用)测试后的
-    COCO AP指标几乎完全一样，看不出区别
+    """
+    to be checked :)
+    heatmap和offset编码解码应该没有问题，但是坐标变换总是时常出现一个像素点偏移. 
+    另外如果使用下面的变换，AP反而降低了0.3AP
     和transforms.preprocess.Preprocess.annotations_inverse中的变换保持一致，
     个人认为最重要的是保持编码（下采样生成featuremap)和解码(把预测的featuremap放大到原始图片尺度）的过程一致即可，
     使用哪种对齐方式可能影响不大，保险起见在随机变换原始图片和对应的标注时也应该统一对齐方式即可。
     我们也尝试测试时使用如下代码替换上面，但结果几乎完全一样 https://github.com/vita-epfl/openpifpaf/issues/183
-    x_scale = image.size[0] / w
-    y_scale = image.size[1] / h
-    for ann in anns:
-        ann['keypoints'][:, 0] = (ann['keypoints'][:, 0] + 0.5) * x_scale - 0.5
-        ann['keypoints'][:, 1] = (ann['keypoints'][:, 1] + 0.5) * y_scale - 0.5
-    """
+    x_scale = target_w / w
+    y_scale = target_h / h
+    anns[:, :, 0] = (anns[:, :, 0] + 0.5) * x_scale - 0.5
+    anns[:, :, 1] = (anns[:, :, 1] + 0.5) * y_scale - 0.5"""
+    # x_scale = target_w / w
+    # y_scale = target_h / h
+    # anns[:, :, 0] = (anns[:, :, 0] + 0.5) * x_scale - 0.5
+    # anns[:, :, 1] = (anns[:, :, 1] + 0.5) * y_scale - 0.5
+
+    anns[:, :, 3] *= math.sqrt(x_scale * y_scale)  # resize the keypoint scale
+
     # adjust meta
     scale_factors = np.array((x_scale, y_scale))  # for w and h
     LOG.debug('meta before: %s', meta)

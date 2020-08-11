@@ -220,19 +220,19 @@ def validation(dump_name, dataset='val2017'):
 
     # # # #############################################################################
     # For evaluation on validation set
-    annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
-    print(annFile)
-    cocoGt = COCO(annFile)
-
-    # # #############################################################################
+    if dataset == 'val2017':
+        annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
 
     # #############################################################################
     # For evaluation on test-dev set
-    # annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
-    # cocoGt = COCO(annFile)
-    # validation_ids = cocoGt.getImgIds()
-    # #############################################################################
+    elif dataset == 'test2017':
+        annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/' \
+                  'image_info_test-dev2017.json'  # image_info_test2017.json
+    else:
+        raise Exception('unknown dataset')
 
+    print(annFile)
+    cocoGt = COCO(annFile)
     resFile = '%s/results/%s_%s_%s_results.json'
     resFile = resFile % (dataDir, prefix, dataset, dump_name)
     print('the path of detected keypoint file is: ', resFile)

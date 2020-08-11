@@ -63,10 +63,11 @@ class AnnotationJitter(Preprocess):
 
     Only used in 0 or 1 binary label, not proper for Gaussian regression.
     关键点标注添加抖动会是的预测的高亮相应范围变大，不是很好，比如造成断裂，一个人的身体出现两个半截pose
-
+    但是，我们发现我们的groundtruth x,y常常会小1个像素（偏移），可以用annotaion增广抖动补偿
     """
 
-    def __init__(self, epsilon=0.5):
+    def __init__(self, shift=0, epsilon=0.5):
+        self.shift = shift
         self.epsilon = epsilon
 
     def __call__(self, image, anns, meta, mask_miss):
@@ -75,8 +76,8 @@ class AnnotationJitter(Preprocess):
 
         for ann in anns:  # loop over each person's annotation
             keypoints_xy = ann[:, :2]  # slice reference
-            sym_rnd = (torch.rand(*keypoints_xy.shape).numpy() - 0.5) * 2.0
-            # torch.rand生成0-1均匀分布，上面一步见了0.5，相当于-0.5~0.5均匀分布
+            sym_rnd = (torch.rand(*keypoints_xy.shape).numpy() - 0.5 + self.shift) * 2.0
+            # torch.rand生成0-1均匀分布，上面一步减去0.5，不加上1时，相当于-0.5~0.5均匀分布.
             keypoints_xy += self.epsilon * sym_rnd
 
         return image, anns, meta, mask_miss

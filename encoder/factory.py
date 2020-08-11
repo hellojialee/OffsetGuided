@@ -5,6 +5,7 @@ from .offset import OffsetMaps
 from config.coco_data import (COCO_KEYPOINTS,
                               COCO_PERSON_SKELETON,
                               COCO_PERSON_WITH_REDUNDANT_SKELETON,
+                              DENSER_COCO_PERSON_SKELETON,
                               REDUNDANT_CONNECTIONS,
                               KINEMATIC_TREE_SKELETON)
 
@@ -102,10 +103,13 @@ def factory_head(head_name, square_length, stride):
         elif head_name in ('omp16',):
             n_keypoints = 17
             OffsetMaps.skeleton = KINEMATIC_TREE_SKELETON
-        elif head_name in ('omp29',):
+        elif head_name in ('omp31',):
             n_keypoints = 17
             OffsetMaps.skeleton = COCO_PERSON_WITH_REDUNDANT_SKELETON
-        elif head_name in ('omp6', 'omps6'):
+        elif head_name in ('omp44',):
+            n_keypoints = 17
+            OffsetMaps.skeleton = DENSER_COCO_PERSON_SKELETON
+        elif head_name in ('omp25', 'omps25'):
             n_keypoints = 17
             OffsetMaps.skeleton = REDUNDANT_CONNECTIONS
         else:
