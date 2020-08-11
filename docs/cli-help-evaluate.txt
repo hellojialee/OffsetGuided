@@ -1,20 +1,8 @@
-python3 evaluate.py --help
+ python3 evaluate.py --help
 usage: evaluate.py [-h] [--logging-output LOGGING_OUTPUT]
                    [--logging-stdout LOGGING_STDOUT]
                    [--logging-write LOGGING_WRITE] [--debug] [-q]
-                   [--shut-data-logging]
-                   [--train-annotations TRAIN_ANNOTATIONS]
-                   [--train-image-dir TRAIN_IMAGE_DIR]
-                   [--val-annotations VAL_ANNOTATIONS]
-                   [--val-image-dir VAL_IMAGE_DIR]
-                   [--n-images-train N_IMAGES_TRAIN]
-                   [--n-images-val N_IMAGES_VAL]
-                   [--loader-workers LOADER_WORKERS] [--batch-size BATCH_SIZE]
-                   [--train-shuffle] [--val-shuffle]
-                   [--square-length SQUARE_LENGTH] [--flip-prob FLIP_PROB]
-                   [--max-rotate MAX_ROTATE] [--min-scale MIN_SCALE]
-                   [--max-scale MAX_SCALE] [--max-translate MAX_TRANSLATE]
-                   [--debug-affine-show] [--initialize-whole INITIALIZE_WHOLE]
+                   [--shut-data-logging] [--initialize-whole INITIALIZE_WHOLE]
                    [--checkpoint-whole CHECKPOINT_WHOLE] [--basenet BASENET]
                    [--two-scale] [--multi-scale] [--no-pretrain]
                    [--basenet-checkpoint BASENET_CHECKPOINT]
@@ -30,10 +18,11 @@ usage: evaluate.py [-h] [--logging-output LOGGING_OUTPUT]
                    [--thre-hmp THRE_HMP] [--min-len MIN_LEN]
                    [--feat-stage FEAT_STAGE] [--person-thre PERSON_THRE]
                    [--sort-dim {2,4}] [--dist-max DIST_MAX]
-                   [--use-scale USE_SCALE] [--resume] [--epochs N]
-                   [--checkpoint-path CHECKPOINT_PATH] [--show-limb-idx N]
-                   [--show-hmp-idx N] [--show-all-limbs]
-                   [--show-detected-poses] [--long-edge LONG_EDGE]
+                   [--use-scale USE_SCALE] [--dump-name DUMP_NAME]
+                   [--dataset {val,test,test-dev}] [--batch-size BATCH_SIZE]
+                   [--long-edge LONG_EDGE] [--loader-workers LOADER_WORKERS]
+                   [--all-images] [--resume]
+                   [--checkpoint-path CHECKPOINT_PATH] [--show-detected-poses]
                    [--local_rank LOCAL_RANK] [--opt-level OPT_LEVEL]
                    [--keep-batchnorm-fp32 KEEP_BATCHNORM_FP32]
                    [--loss-scale LOSS_SCALE] [--channels-last]
@@ -43,15 +32,25 @@ Evaluate the one-scale performance on MSCOCO dataset
 
 optional arguments:
   -h, --help            show this help message and exit
+  --dump-name DUMP_NAME
+                        detection file name (default:
+                        hourglass104_focal_l2_epoch_178_640_input_1scale)
+  --dataset {val,test,test-dev}
+                        dataset to evaluate (default: val)
+  --batch-size BATCH_SIZE
+                        batch size (default: 8)
+  --long-edge LONG_EDGE
+                        long edge of input images (default: 640)
+  --loader-workers LOADER_WORKERS
+                        number of workers for data loading (default: 8)
+  --all-images          run over all images irrespective of catIds (default:
+                        False)
   --resume, -r          resume from checkpoint (default: False)
-  --epochs N            number of epochs to train (default: 100)
   --checkpoint-path CHECKPOINT_PATH, -p CHECKPOINT_PATH
                         folder path checkpoint storage of the whole pose
                         estimation model (default: link2checkpoints_storage)
   --show-detected-poses
                         show the final results (default: False)
-  --long-edge LONG_EDGE
-                        long edge of input images (default: 640)
 
 logging:
   --logging-output LOGGING_OUTPUT
@@ -65,42 +64,6 @@ logging:
   -q, --quiet           only show warning messages or above (default: False)
   --shut-data-logging   shut up the logging info during data preparing
                         (default: False)
-
-dataset and loader:
-  --train-annotations TRAIN_ANNOTATIONS
-  --train-image-dir TRAIN_IMAGE_DIR
-  --val-annotations VAL_ANNOTATIONS
-  --val-image-dir VAL_IMAGE_DIR
-  --n-images-train N_IMAGES_TRAIN
-                        number of images to sample from the trains subset
-                        (default: None)
-  --n-images-val N_IMAGES_VAL
-                        number of images to sample from the val subset
-                        (default: None)
-  --loader-workers LOADER_WORKERS
-                        number of workers for data loading (default: 8)
-  --batch-size BATCH_SIZE
-                        batch size (default: 8)
-  --train-shuffle       force the trains dataset shuffle by hand (default:
-                        False)
-  --val-shuffle         force the validate dataset shuffle by hand (default:
-                        False)
-
-training parameters for warp affine:
-  --square-length SQUARE_LENGTH
-                        square edge of input images (default: 512)
-  --flip-prob FLIP_PROB
-                        the probability to flip the input image (default: 0.5)
-  --max-rotate MAX_ROTATE
-  --min-scale MIN_SCALE
-                        lower bound of the relative image scale during
-                        augmentation (default: 0.7)
-  --max-scale MAX_SCALE
-  --max-translate MAX_TRANSLATE
-                        upper bound of shitting the image during augmentation
-                        (default: 50)
-  --debug-affine-show   show the transformed image and keyooints (default:
-                        False)
 
 model configuration:
   --initialize-whole INITIALIZE_WHOLE
@@ -177,12 +140,12 @@ limb collections in post-processing:
 greedy grouping in post-processing:
   --person-thre PERSON_THRE
                         threshold for pose instance scores. (default: 0.08)
-  --sort-dim {2,4}      sort the person poses by the values at the this
-                        axis. 2th dim means keypoints score, 4th dim means limb
+  --sort-dim {2,4}      sort the person poses by the values at the this axis.
+                        2th dim means keypoints score, 4th dim means limb
                         score. (default: 2)
   --dist-max DIST_MAX   abandon limbs with delta offsets bigger than dist_max,
-                        only useful when keypoint scales are unavailable.
-                        (default: 10)
+                        only useful when keypoint scales are not used.
+                        (default: 20)
   --use-scale USE_SCALE
                         use the inferred keypoint scales as the criterion to
                         keep limbs (keypoint pairs) (default: True)
@@ -198,6 +161,6 @@ apex configuration:
                         'choices': None, 'required': False, 'help': 'channel
                         last may lead to 22% speed up', 'metavar': None,
                         'container': <argparse._ArgumentGroup object at
-                        0x7f3d99f8ba90>, 'prog': 'evaluate.py'}peed up
+                        0x7f74dd0c6860>, 'prog': 'evaluate.py'}peed up
                         (default: False)
   --print-freq N, -f N  print frequency (default: 10) (default: 10)

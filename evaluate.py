@@ -31,7 +31,18 @@ except ImportError:
     raise ImportError(
         "Please install apex from https://www.github.com/nvidia/apex to run this example.")
 
+os.environ['CUDA_VISIBLE_DEVICES'] = "2"  # choose the available GPUs
+
 LOG = logging.getLogger(__name__)
+
+ANNOTATIONS_TRAIN = 'data/link2COCO2017/annotations/person_keypoints_train2017.json'
+ANNOTATIONS_VAL = 'data/link2COCO2017/annotations/person_keypoints_val2017.json'
+IMAGE_DIR_TRAIN = 'data/link2COCO2017/train2017'
+IMAGE_DIR_VAL = 'data/link2COCO2017/val2017'
+
+ANNOTATIONS_TESTDEV = 'data/link2COCO2017/annotations_trainval_info/image_info_test-dev2017.json'
+ANNOTATIONS_TEST = 'data/link2COCO2017/annotations_trainval_info/image_info_test2017.json'
+IMAGE_DIR_TEST = 'data/link2COCO2017/test2017/'
 
 
 def evaluate_cli():
@@ -42,21 +53,31 @@ def evaluate_cli():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     logs.cli(parser)
-    data.data_cli(parser)
     models.net_cli(parser)
     decoder.decoder_cli(parser)
 
+    parser.add_argument('--dump-name',  # TODO: edit this name each evaluation
+                        default='hourglass104_focal_l2_epoch_178_640_input_1scale',
+                        type=str, help='detection file name')
+
+    parser.add_argument('--dataset', choices=('val', 'test', 'test-dev'), default='val',
+                        help='dataset to evaluate')
+    parser.add_argument('--batch-size', default=8, type=int,
+                        help='batch size')
+    parser.add_argument('--long-edge', default=640, type=int,
+                        help='long edge of input images')
+    parser.add_argument('--loader-workers', default=8, type=int,
+                        help='number of workers for data loading')
+    parser.add_argument('--all-images', default=False, action='store_true',
+                        help='run over all images irrespective of catIds')
+
     parser.add_argument('--resume', '-r', action='store_true', default=False,
                         help='resume from checkpoint')
-    parser.add_argument('--epochs', default=100, type=int, metavar='N',
-                        help='number of epochs to train')
     parser.add_argument('--checkpoint-path', '-p',
                         default='link2checkpoints_storage',
                         help='folder path checkpoint storage of the whole pose estimation model')
     parser.add_argument('--show-detected-poses', action='store_true', default=False,
                         help='show the final results')
-    parser.add_argument('--long-edge', default=640, type=int,
-                        help='long edge of input images')
 
     group = parser.add_argument_group('apex configuration')
     group.add_argument("--local_rank", default=0, type=int)
@@ -71,6 +92,23 @@ def evaluate_cli():
     # args = parser.parse_args(
     #     '--checkpoint-whole link2checkpoints_storage/PoseNet_18_epoch.pth --resume --no-pretrain'.split())
     args = parser.parse_args()
+
+    if args.dataset == 'val':
+        args.image_dir = IMAGE_DIR_VAL
+        args.annotation_file = ANNOTATIONS_VAL
+    elif args.dataset == 'test':
+        args.image_dir = IMAGE_DIR_TEST
+        args.annotation_file = ANNOTATIONS_TEST
+    elif args.dataset == 'test-dev':
+        args.image_dir = IMAGE_DIR_TEST
+        args.annotation_file = ANNOTATIONS_TESTDEV
+    else:
+        raise Exception
+
+    if args.dataset in ('test', 'test-dev') and not args.all_images:
+        print('have to use --all-images for this dataset')
+        args.all_images = True
+
     return args
 
 
@@ -111,7 +149,18 @@ def run_images():
     ]
     preprocess = transforms.Compose(preprocess_transformations)
 
-    train_loader, val_loader = data.dataloader_factory(args, preprocess)
+    dataset = data.CocoKeypoints(
+        args.image_dir,
+        annFile=args.annotation_file,
+        preprocess=preprocess,
+        all_persons=True,  # we do not know if people exitsts in each image of test-dev
+        all_images=args.all_images,
+    )
+    data_loader = torch.utils.data.DataLoader(
+        dataset, batch_size=args.batch_size,
+        pin_memory=args.pin_memory,
+        num_workers=args.loader_workers,
+        collate_fn=data.collate_images_anns_meta)
 
     model, _ = models.model_factory(args)
 
@@ -136,7 +185,7 @@ def run_images():
 
     batch_time = AverageMeter()
     end = time.time()
-    for batch_idx, (images, annos, metas) in enumerate(val_loader):
+    for batch_idx, (images, annos, metas) in enumerate(data_loader):
 
         images = images.cuda(non_blocking=True)
 
@@ -166,8 +215,9 @@ def run_images():
                 v = []
                 for xyv in person[:, :3]:
                     v.append(xyv[2])
-                    keypoints_list += [xyv[0], xyv[1],
-                                       1 if xyv[0] > 0 or xyv[1] > 0 else 0]
+                    keypoints_list += [
+                        xyv[0], xyv[1], 1 if xyv[0] > 0 or xyv[1] > 0 else 0
+                    ]
 
                 result_keypoints.append({
                     'image_id': image_id,
@@ -204,7 +254,7 @@ def run_images():
             print('==================> Epoch: [{0}][{1}/{2}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Speed {3:.3f} ({4:.3f}) <================ \t'.format(
-                0, batch_idx, len(val_loader),
+                0, batch_idx, len(data_loader),
                 args.world_size * args.batch_size / batch_time.val,
                 args.world_size * args.batch_size / batch_time.avg,
                 batch_time=batch_time))
@@ -212,30 +262,18 @@ def run_images():
     return result_keypoints, result_image_ids
 
 
-def validation(dump_name, dataset='val2017'):
-    annType = 'keypoints'
+def validation(annFile, dump_name, dataset):
     prefix = 'person_keypoints'
 
     dataDir = 'data/link2COCO2017'
 
-    # # # #############################################################################
-    # For evaluation on validation set
-    if dataset == 'val2017':
-        annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
-
-    # #############################################################################
-    # For evaluation on test-dev set
-    elif dataset == 'test2017':
-        annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/' \
-                  'image_info_test-dev2017.json'  # image_info_test2017.json
-    else:
-        raise Exception('unknown dataset')
-
     print(annFile)
     cocoGt = COCO(annFile)
+
     resFile = '%s/results/%s_%s_%s_results.json'
     resFile = resFile % (dataDir, prefix, dataset, dump_name)
-    print('the path of detected keypoint file is: ', resFile)
+    print('======================>')
+    print('The path of detected keypoint file is: ', resFile)
     os.makedirs(os.path.dirname(resFile), exist_ok=True)
 
     results_keypoints, validation_ids = run_images()
@@ -244,7 +282,7 @@ def validation(dump_name, dataset='val2017'):
 
     # ####################  COCO Evaluation ################
     cocoDt = cocoGt.loadRes(resFile)
-    cocoEval = COCOeval(cocoGt, cocoDt, annType)
+    cocoEval = COCOeval(cocoGt, cocoDt, iouType='keypoints')
     cocoEval.params.imgIds = validation_ids  # only part of the person images are evaluated
     cocoEval.evaluate()
     cocoEval.accumulate()
@@ -263,6 +301,10 @@ if __name__ == '__main__':
     best_loss = float('inf')
     args = evaluate_cli()
 
-    eval_result_original = validation(dump_name='hourglass104_focal_epoch_70_640_input_1scale',
-                                      dataset='val2017')  # 'val2017'
+    print(args.dump_name)   # todo: 添加 NN inference 和 decoding time记录
+    eval_result_original = validation(args.annotation_file,
+                                      dump_name=args.dump_name,
+                                      dataset=args.dataset)
     print('\nEvaluation finished!')
+
+

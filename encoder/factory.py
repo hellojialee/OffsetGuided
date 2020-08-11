@@ -23,7 +23,8 @@ def encoder_cli(parser):
     group = parser.add_argument_group('offsetmap and scalemap encoder')
     group.add_argument('--fill-scale-size', default=OffsetMaps.fill_scale_size,
                        type=int,
-                       help='the area around the keypoint will be filled with joint scale values.')
+                       help='the area around the keypoint will be filled with '
+                            'joint scale values and offset.')
     group.add_argument('--min_scale', default=OffsetMaps.min_scale,
                        type=float, help='set minimum keypoint scale')
 
