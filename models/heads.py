@@ -185,7 +185,7 @@ def factory_head(head_name, n_stacks, stride, inp_dim,
                 'using %d skeleton connections to generate offsetmaps',
                 n_skeleton)
             assert n_skeleton in [
-                19, 16, 29, 6], 'check skeleton configuration'
+                19, 16, 31, 44, 25], 'check skeleton configuration'
 
         else:
             n_skeleton = 19

@@ -9,17 +9,18 @@ from models import Hourglass104, Hourglass4Stage
 LOG = logging.getLogger(__name__)
 
 
-def load_model(model, ckpt_path, *, optimizer=None, drop_layers=True,
+def load_model(model, ckpt_path, *, optimizer=None, drop_layers=True, drop_name='offset_convs',
                resume_optimizer=True, optimizer2cuda=True, load_amp=False):
     """
     Load pre-trained model and optimizer checkpoint.
 
     Args:
-        model: 
+        model:
         ckpt_path: 
         optimizer: 
-        drop_layers (bool): drop pre-trained params of the output layers, etc 
-        resume_optimizer: 
+        drop_layers (bool): drop pre-trained params of the output layers, etc
+        drop_name: drop layers with this string in names
+        resume_optimizer:
         optimizer2cuda (bool): move optimizer statues to cuda
         load_amp (bool): load the amp state including loss_scalers
             and their corresponding unskipped steps
@@ -31,9 +32,13 @@ def load_model(model, ckpt_path, *, optimizer=None, drop_layers=True,
         print(f'WARNING!! ##### Current checkpoint file {ckpt_path} DOSE NOT exist!!#####')
         warnings.warn("No pre-trained parameters are loaded!"
                       " Please make sure you initialize the model randomly!")
-        # return without loading
-        load_amp = False
-        return model, optimizer, start_epoch, start_loss, load_amp
+        user_choice = input("Are you sure want to continue with randomly model (y/n):\n")
+        if user_choice in ('y', 'Y'):
+            # return without loading
+            load_amp = False
+            return model, optimizer, start_epoch, start_loss, load_amp
+        else:
+            sys.exit(0)
 
     checkpoint = torch.load(ckpt_path, map_location=torch.device('cpu'))
     LOG.info('Loading pre-trained model %s, checkpoint at epoch %d', ckpt_path,
@@ -55,7 +60,7 @@ def load_model(model, ckpt_path, *, optimizer=None, drop_layers=True,
 
     # convert parallel/distributed model to single model
     for k, v in state_dict_.items():  # Fixme: keep consistent with our model
-        if ('before_regression' in k or 'offset' in k) and drop_layers:  #
+        if (drop_name in k or 'some_example_convs' in k) and drop_layers:  #
             continue
         if k.startswith('module') and not k.startswith('module_list'):
             name = k[7:]  # remove prefix 'module.'

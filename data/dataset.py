@@ -100,7 +100,7 @@ class CocoKeypoints(torch.utils.data.Dataset):
         LOG.debug(image_info)
         image_path = os.path.join(self.img_dir, image_info['file_name'])
         if not os.path.exists(image_path):
-            raise IOError("image path dose not exist: %s" % image_path)
+            raise IOError("image with current path dose not exist: %s" % image_path)
 
         image = cv2.imread(image_path)
         # We use RGB image sequence all through our project.

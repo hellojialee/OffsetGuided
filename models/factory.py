@@ -75,7 +75,8 @@ def net_cli(parser):
     group.add_argument('--fgamma', default=losses.GAMMA, type=float,
                        help='order of scaling factor in focal L2 loss during training')
     group.add_argument('--lmargin', default=losses.MARGIN, type=float,
-                       help='offset length below this value will not be punished during training')
+                       help='offset length below this value will not be punished '
+                            'during training when we rescale the offset loss by sqrt operation')
 
 
 def model_factory(args):

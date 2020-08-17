@@ -51,7 +51,7 @@ def train_cli():
     parser.add_argument('--freeze', action='store_true', default=False,
                         help='freeze the pre-trained layers of the BaseNet, i.e. Backbone')
     parser.add_argument('--drop-layers', action='store_true', default=False,
-                        help='drop some layers described in models.networks.load_model')
+                        help='drop some layers described in models/networks.py:58')
     parser.add_argument('--epochs', default=100, type=int, metavar='N',
                         help='number of epochs to train')
     parser.add_argument('--recount-epoch', default=False, action='store_true',

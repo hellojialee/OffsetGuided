@@ -195,13 +195,13 @@ class LimbsCollect(object):
         return jtypes_f, jtypes_t
 
     @staticmethod
-    def _channel_dets(dets: tuple, jtypes: list, threshold=0.06) -> tuple:
+    def _channel_dets(dets: tuple, jtypes: list, thresh=0.06) -> tuple:
         # shape of each item of dets: (N, 17, K) or may be (N, C, K), in which K is topK
         dets_channels = [temp[:, jtypes, :].unsqueeze(-1) for temp in dets]
         kps_scores, kps_inds, kps_ys, kps_xs = dets_channels  # [4 * (N, L, K, 1)]
         kps_xys = torch.cat((kps_xs, kps_ys), dim=-1)
         # ######## set candidate keypoints with low responses off the image #######
-        kps_xys[kps_scores.expand_as(kps_xys) < threshold] -= 100000
+        kps_xys[kps_scores.expand_as(kps_xys) < thresh] -= 100000
         return kps_inds, kps_scores, kps_xys
 
     @staticmethod
@@ -209,5 +209,5 @@ class LimbsCollect(object):
         # shape of scsmp: (N, C, H, W)
         scsmp_channels = scsmp[:, jtypes, :, :]  # (N, L, H, W)
         flat_scsmp = scsmp_channels.view((n, n_limbs, -1)).unsqueeze(-1)  # (N, L, H*W, 1)
-        kps_scale = flat_scsmp.gather(-2, kps_inds)  # (N, L, K, 1)
+        kps_scale = flat_scsmp.gather(-2, kps_inds)  # (N, L, K, 1), gathered by kps_inds
         return kps_scale

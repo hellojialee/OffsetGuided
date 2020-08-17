@@ -7,6 +7,10 @@ python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-ch
 
 python demo_batch.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_158_epoch.pth --resume --sqrt-re --show-limb-idx 9 --show-hmp-idx 7 --show-all-limbs --batch-size 1
 
-python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_178_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --min-scale 0.5 --max-scale 1.5 --fill-scale-size 7
+python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_178_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --min-scale 0.5 --max-scale 1.5 --fill-scale-size 10
 
 python evaluate.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/fl2_offset_sqrt_sum/PoseNet_178_epoch.pth --resume --sqrt-re --batch-size 16 --loader-workers 8 --dataset test-dev
+
+python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_200_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --headnets hmp omp44 --learning-rate 6.25e-5 --recount-epoch --drop-optim-state --lambdas 1 1 0.001 1
+
+python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_200_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --headnets hmp omp44 --learning-rate 6.25e-5 --recount-epoch --drop-optim-state --lambdas 1 1 0.001 1 --include-spread --offset-loss offset_laplace_loss

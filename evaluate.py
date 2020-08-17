@@ -31,7 +31,7 @@ except ImportError:
     raise ImportError(
         "Please install apex from https://www.github.com/nvidia/apex to run this example.")
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "2"  # choose the available GPUs
+os.environ['CUDA_VISIBLE_DEVICES'] = "1"  # choose the available GPUs
 
 LOG = logging.getLogger(__name__)
 
@@ -56,8 +56,18 @@ def evaluate_cli():
     models.net_cli(parser)
     decoder.decoder_cli(parser)
 
+    # todo: 自动更改dump_name
+    # def default_output_file(args):
+    #     out = 'logs/outputs/{}-{}'.format(args.basenet, '-'.join(args.headnets))
+    #     if args.square_length != 512:
+    #         out += '-edge{}'.format(args.square_length)
+    #     now = datetime.datetime.now().strftime('%y%m%d-%H%M%S')
+    #     out += '-{}.pkl'.format(now)
+    #
+    #     return out
+
     parser.add_argument('--dump-name',  # TODO: edit this name each evaluation
-                        default='hourglass104_focal_l2_epoch_178_640_input_1scale',
+                        default='hourglass104_focal_l2_epoch_245_0.001offset_640_input_1scale',
                         type=str, help='detection file name')
 
     parser.add_argument('--dataset', choices=('val', 'test', 'test-dev'), default='val',
@@ -223,7 +233,7 @@ def run_images():
                     'image_id': image_id,
                     'category_id': 1,  # person category
                     'keypoints': keypoints_list,
-                    'score': sum(v) / len(v),  # todo: person pose scare
+                    'score': sum(v) / len(v),  # todo: the criterion of person pose score
                 })
 
         if args.show_detected_poses:

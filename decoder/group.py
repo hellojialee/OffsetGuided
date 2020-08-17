@@ -64,13 +64,17 @@ class GreedyGroup(object):
                 dist_valid = conns[:, 8] < self.dist_max
                 # conns = np.hstack((conns, 4 * np.ones((len(conns), 2))))  # we did this in LimbsCollect
 
+            # ##########################################################################
             # ######################## remove false limbs ##############################
+            # ##########################################################################
             # mask out the limbs with low responses which were moved off the image
             valid = dist_valid & (conns[:, 0] > 0) & (conns[:, 4] > 0) & (
                     conns[:, 3] > 0) & (conns[:, 1] > 0)  # we can ignore
             conns = conns[valid]  # (K, 11), may be (kk, 11) in which kk<K
 
+            # ###########################################################################
             # ############ delete limb connections sharing the same keypoint ############
+            # ###########################################################################
             conns = self._delete_reconns(conns)
             kk = len(conns)
             mm = len(subset)
@@ -95,13 +99,14 @@ class GreedyGroup(object):
 
             mask_sum = np.sum((jIDtab_expand.astype(int) == limb_inds_expand.astype(int)),
                               axis=-1)  # (M, K)
-
-            # criterion to judge if we replace the exiting keypoints
+            # ########################################################################
+            # ######## criterion to judge if we replace the exiting keypoints ########
+            # ########################################################################
             replace_mask = (limb_scores_expand[..., 1] > sub_scores_expand[..., 1]) | (
                     limb_scores_expand[..., 1] > sub_scores_expand[..., 0])  # (M, K), score of joint_t
 
             # ########################################################################
-            # ######### handle redundant limbs belonging to the same person skeleton #######
+            # ##### handle redundant limbs belonging to the same person skeleton #####
             # ########################################################################
             M_inds, K_inds = ((mask_sum == 2) & replace_mask).nonzero()  # do not forget the parenthesis!
             if len(M_inds):
@@ -115,6 +120,8 @@ class GreedyGroup(object):
             # ########################################################################
             M_inds, K_inds = ((mask_sum == 1) & replace_mask).nonzero()
             if len(M_inds):
+                # fixme: 有可能后来的冗余limb把一些点强行塞给了某些人，因为我们通过delete_conns只能保证endpoint只使用一次，
+                  # 不能保证它们又作为startpoint在之后的limb循环中被重复使用，是不是可以通过skeleton定义limb连接方向避免该问题
                 subset[M_inds, jtype_f, -1] = limb_inds[K_inds, 0]
                 subset[M_inds, jtype_t, -1] = limb_inds[K_inds, 1]
                 subset[M_inds, jtype_f, :4] = xyvs1[K_inds]
@@ -125,7 +132,7 @@ class GreedyGroup(object):
                 mask_sum[mask_sum == 1] = -1  # mask out the solved limbs
 
             # ########################################################################
-            # ######### merge the subsets belonging to the same person skeleton #######
+            # ######## merge the subsets belonging to the same person skeleton #######
             # ########################################################################
             if mm >= 2:
                 Msubset_expand = np.expand_dims(subset[..., -1],
@@ -134,7 +141,7 @@ class GreedyGroup(object):
                                                 axis=0)  # .repeat(mm, axis=0)  # (M, M, 17) or (M, N, 17)
                 merge_mask_sum = np.sum((Msubset_expand.astype(int) == Nsubset_expand.astype(int))
                                         & (Msubset_expand.astype(int) != -1),  # & (Nsubset_expand.astype(int) != -1)
-                                        axis=-1)  # (M, M)
+                                        axis=-1)  # (M, M) or be (M, N)
 
                 merge_mask_sum = np.triu(merge_mask_sum, 1)
                 M_inds, N_inds = (merge_mask_sum == 2).nonzero()
@@ -145,8 +152,8 @@ class GreedyGroup(object):
                     subset = np.delete(subset, N_inds, axis=0)
 
                 # other cases
-                M_inds, N_inds = (merge_mask_sum >= 3).nonzero()
-                if len(M_inds):
+                Mm_inds, Nm_inds = (merge_mask_sum >= 3).nonzero()
+                if len(Mm_inds):  # todo: 取消分值小的所有连接，应该和mask_sum == 1情况下没处理好有关
                     print('usually this never happens, ignore handling skeletons crossing at 3 joints')
                     pass
 
@@ -194,12 +201,15 @@ class GreedyGroup(object):
     @staticmethod
     def _delete_reconns(conns):
         """
-        Ensure one keypoint can only be used once by adjacent keypoints in the skeleton.
+        Sort and delete reused keypoint, ensuring one keypoint can only be used once
+        by adjacent keypoints in the skeleton.
+
         Args:
             conns (np.ndarray): shape (K, 11), in which the last dim includes:
                 [x1, y1, v1, x2, y2, v2, ind1, ind2, len_delta, len_limb, limb_score, scale1, scale2]
+                # 0,  1, 2,  3,  4,  5,    6,   7,      8,         9,        10,        11,    12
         """
-        conns = conns[np.argsort(-conns[:, -1])]  # -1: sort by limb_scores
+        conns = conns[np.argsort(-conns[:, 10])]  # -1: sort by limb_scores
         repeat_check = []
         unique_list = []
         for j, ind_t in enumerate(conns[:, 7].astype(int)):

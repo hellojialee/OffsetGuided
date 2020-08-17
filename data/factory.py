@@ -87,10 +87,10 @@ def data_cli(parser):
                        help='the probability to flip the input image')
     group.add_argument('--max-rotate', default=40, type=float,
                        help='upper bound of the image rotation during augmentation')
-    group.add_argument('--min-scale', default=0.7, type=float,
+    group.add_argument('--min-scale', default=0.5, type=float,
                        help='lower bound of the relative'
                             ' image scale during augmentation')
-    group.add_argument('--max-scale', default=1.3, type=float,
+    group.add_argument('--max-scale', default=1.5, type=float,
                        help='upper bound of the relative'
                             ' image scale during augmentation')
     group.add_argument('--max-translate', default=50, type=int,
