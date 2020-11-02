@@ -19,7 +19,7 @@ class OffsetMaps(object):
     """
     fill_scale_size = 10  # the diameter of the filled area
     # around keypoints will be filled with joint scale
-    min_scale = 1  # minimum keypoint scale
+    min_scale = 0.1  # minimum keypoint scale
     skeleton = COCO_PERSON_SKELETON  # human skeleton connections
     include_scale = True
 
@@ -108,6 +108,7 @@ class OffsetMapGenerator(object):
         # generate offset by sampling floating point positions in the original input resolution space
         self.put_connections(feature_maps, joints)
 
+
         return offset_maps, scale_maps
 
     def put_connections(self, feature_maps, joints):
@@ -131,9 +132,17 @@ class OffsetMapGenerator(object):
         # Immutable values include numbers, strings, and tuples. Almost everything
         # else is mutable, including lists, dicts, and user-defined objects. Mutable
         # means that **the value has methods that can change the value in-place**.
+        # 翻译一下就是 mutable values可以in-place更改内存内容，
+        # 而immutable values不能原地更改，实际上是新生成了value然后返回赋值
         # Immutable means that the value can never change, instead when you think you
         # are changing the value, you are REALLY making new values from old ones.
+
+        # tuple 是不可改的，但是如果它的内部元素可改就另说了，
+        # https://blog.csdn.net/lzw2016/article/details/85012814
+        # 如果直接用tuple索引复制更改，虽然可以更改原始元素内存，但因为tuple不支持 = assign，所以仍然报错
+
         # In our case, we refer feature_maps[0] and feature_maps[1] as they are user-defined objects.
+        # Thus, we can change the original storage in-place.
         offset_maps = feature_maps[0]
         scale_maps = feature_maps[1]
 

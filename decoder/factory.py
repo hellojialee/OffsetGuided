@@ -21,6 +21,7 @@ class PostProcess(object):
                  hmp_stride, off_stride,
                  keypoints, skeleton,
                  limb_collector, limb_grouper,
+                 use_scale=False,
                  hmp_index=0, omp_index=1, feat_stage=-1):
         super(PostProcess, self).__init__()
         self.batch_size = batch_size
@@ -33,8 +34,9 @@ class PostProcess(object):
         self.hmp_index = hmp_index
         self.omp_index = omp_index
         self.feat_stage = feat_stage
+        self.use_scale = use_scale
         LOG.info('use the inferred feature maps at stage %d, '
-                 'heatmap index is %d, offsetmap index is %d, ' 
+                 'heatmap index is %d, offsetmap index is %d, '
                  'parallel execution of GreedyGroup in Pools with %d workers',
                  feat_stage, hmp_index, omp_index, batch_size)
         self.worker_pool = multiprocessing.Pool(batch_size)
@@ -50,11 +52,14 @@ class PostProcess(object):
         offs = out_offsets[self.feat_stage]
         scmps = out_scales[self.feat_stage]
 
-        hmps = torch.nn.functional.interpolate(
+        hmps = torch.nn.functional.interpolate(  # todo: 可以只对hmps缩放，offs和scamps仍然在下采样分辨率下取
             hmps, scale_factor=self.hmp_stride, mode="bicubic")
         offs = torch.nn.functional.interpolate(
             offs, scale_factor=self.off_stride, mode="bicubic")
 
+        if self.use_scale and isinstance(scmps, torch.Tensor):
+            scmps = torch.nn.functional.interpolate(
+                scmps, scale_factor=self.off_stride, mode="bicubic")
         # convert torch.Tensor to numpy.ndarray
         limbs = self.limb_collect.generate_limbs(hmps, offs, scmps).cpu().numpy()
         # put grouping into Pools
@@ -99,7 +104,8 @@ def decoder_cli(parser):
                        help='abandon limbs with delta offsets bigger than dist_max, '
                             'only useful when keypoint scales are not used.')
     group.add_argument('--use-scale', default=True, type=boolean_string,
-                       help='use the inferred keypoint scales as the criterion '
+                       help='only effective when we set --include-scale in the network'
+                            'use the inferred keypoint scales as the criterion '
                             'to keep limbs (keypoint pairs)')
 
 
@@ -174,6 +180,7 @@ def decoder_factory(args):
                        skeleton=temp_dic['skeleton'],
                        limb_collector=limb_handler,
                        limb_grouper=skeleton_grouper,
+                       use_scale=args.use_scale,
                        feat_stage=args.feat_stage)
 
 

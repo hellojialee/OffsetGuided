@@ -26,7 +26,7 @@ def adjust_learning_rate(learning_rate, world_size, optimizer,
 
     lr = learning_rate * world_size * (0.2 ** factor)
 
-    if epoch > 70:  # FIXME
+    if epoch > 50:  # FIXME
         lr = 2e-5
 
     """Warmup the learning rate"""

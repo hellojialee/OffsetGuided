@@ -111,6 +111,8 @@ class OffsetMapsHead(torch.nn.Module):
 
             if self.include_spread:
                 spread = spread_layer(x)  # fixme: PIFAF use Leaky ReLu to do what?
+
+                # spread = torch.nn.functional.relu(spread + 2) - 1.99  # spread是lnb, 大于0
                 out_spreads.append(spread)
             else:
                 out_spreads.append([])

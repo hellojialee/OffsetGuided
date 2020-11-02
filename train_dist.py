@@ -48,6 +48,9 @@ def train_cli():
     parser.add_argument('--drop-optim-state', dest='resume_optimizer', action='store_false',
                         default=True,
                         help='do not resume the optimizer from checkpoint.')
+    parser.add_argument('--drop-amp-state', dest='load_amp', action='store_false',
+                        default=True,
+                        help='do not resume the apex apm statue from checkpoint.')
     parser.add_argument('--freeze', action='store_true', default=False,
                         help='freeze the pre-trained layers of the BaseNet, i.e. Backbone')
     parser.add_argument('--drop-layers', action='store_true', default=False,
@@ -223,7 +226,7 @@ def main():
     if args.resume:
         model, optimizer, start_epoch, best_loss, amp_state = models.networks.load_model(
             model, args.checkpoint_whole, optimizer=optimizer, resume_optimizer=args.resume_optimizer,
-            drop_layers=args.drop_layers, optimizer2cuda=args.use_cuda, load_amp=True)
+            drop_layers=args.drop_layers, optimizer2cuda=args.use_cuda, load_amp=args.load_amp)
         if amp_state:
             print(f'Amp state has been restored from the checkpoint at epoch {start_epoch - 1}.')
             amp.load_state_dict(amp_state)  # load amp_state after amp.initialize
@@ -256,7 +259,7 @@ def main():
                                              drop_last=True)
 
     # ############################# Train and Validate #############################
-    LOG.debug('multi-task learning scaling factors is %s: ', args.lambdas)
+    LOG.debug('multi-task learning scaling factors are %s: ', args.lambdas)
     if args.recount_epoch:  # restart the epoch counter
         start_epoch = 0
     for epoch in range(start_epoch, start_epoch + args.epochs):
@@ -309,6 +312,7 @@ def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
         assert len(multi_losses) <= len(args.lambdas), 'lambdas is incomplete'
         weighted_losses = [torch.mul(lam, l) for lam, l in
                            zip(args.lambdas, multi_losses)]
+        LOG.debug('weighted losses: %s', torch.tensor(weighted_losses).cpu().numpy().tolist())
         loss = sum(weighted_losses)  # type: torch.Tensor
 
         if loss.item() > 1e8:  # try to rescue the gradient explosion

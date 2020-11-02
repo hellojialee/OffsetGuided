@@ -42,9 +42,9 @@ def net_cli(parser):
     group.add_argument('--max-stride', default=128, type=int, choices=[64, 128],
                        help='the max down-sampling stride through the network. ')
     group.add_argument('--include-spread', default=False, action='store_true',
-                       help='add conv layers to regress the spread_b '
+                       help='add conv layers into the headnet to regress the spread_b '
                             'of Laplace distribution, you should set it to '
-                            'True if you chose laplace loss')
+                            'True if you want to use laplace loss')
     group.add_argument('--include-background', default=False, action='store_true',
                        help='include the heatmap of background channel')
     group.add_argument('--include-scale', default=False, action='store_true',
@@ -52,7 +52,7 @@ def net_cli(parser):
                             'in separate channels')
 
     group = parser.add_argument_group('loss configuration')
-    group.add_argument('--lambdas', default=[1, 1, 0.01, 1],
+    group.add_argument('--lambdas', default=[1, 1, 0.01, 0.01],
                        type=float, nargs='+',
                        help='learning task scaling factors for hmp_loss, bg_hmp_loss, '
                             'offset_loss and scale_loss, directly multiplied, not averaged')

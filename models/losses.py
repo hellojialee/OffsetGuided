@@ -23,7 +23,7 @@ def l2(x, t):
 
 def laplace(norm, logb):
     """Element-wise laplace loss"""
-    out = 0.693147 + logb + norm * torch.exp(-logb)
+    out = logb + torch.mul(norm, torch.exp(-logb))  # + 0.693147
     return out
 
 

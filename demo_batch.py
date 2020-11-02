@@ -176,6 +176,9 @@ def test(val_loader, model, criterion, epoch, processor):
             loss = sum(weighted_losses)  # args.lambdas defined in models.factory
 
         # post-processing for generating individual poses
+        # debug_hmp_output = outputs[0][0][1].cpu().numpy()
+        # debug_omp_output = outputs[1][0][1].cpu().numpy()
+
         batch_poses = processor.generate_poses(outputs)
 
         if args.show_detected_poses:

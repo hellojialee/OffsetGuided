@@ -24,7 +24,7 @@ def cli(parser):
                        help='print debug messages')
     group.add_argument('-q', '--quiet', default=False, action='store_true',
                        help='only show warning messages or above')
-    group.add_argument('--shut-data-logging', default=False, action='store_true',
+    group.add_argument('--shut-data-logging', default=True, type=boolean_string,
                        help='shut up the logging info during data preparing')
 
 
