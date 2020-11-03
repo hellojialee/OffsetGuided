@@ -88,7 +88,7 @@ class LimbsCollect(object):
         n_limbs = len(self.skeleton)  # L
         LOG.debug('%d limb connections are defined', n_limbs)
 
-        # 2 * (N, L, K, 1)，and (N, L, K, 2)
+        # 2 * (N, L, K, 1)，and (N, L, K, 2); top K limbs of high responses
         kps_inds_f, kps_scores_f, kps_xys_f = self._channel_dets(
             dets, self.jtypes_f, self.thre_hmp)
 

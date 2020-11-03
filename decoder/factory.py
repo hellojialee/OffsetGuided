@@ -19,12 +19,14 @@ LOG = logging.getLogger(__name__)
 class PostProcess(object):
     def __init__(self, batch_size,
                  hmp_stride, off_stride,
+                 inter_mode,
                  keypoints, skeleton,
                  limb_collector, limb_grouper,
                  use_scale=False,
                  hmp_index=0, omp_index=1, feat_stage=-1):
         super(PostProcess, self).__init__()
         self.batch_size = batch_size
+        self.inter_mode = inter_mode  # type: str
         self.hmp_stride = hmp_stride
         self.off_stride = off_stride
         self.keypoints = keypoints
@@ -37,8 +39,9 @@ class PostProcess(object):
         self.use_scale = use_scale
         LOG.info('use the inferred feature maps at stage %d, '
                  'heatmap index is %d, offsetmap index is %d, '
+                 'interpolate the predicted heatmaps using %s, '
                  'parallel execution of GreedyGroup in Pools with %d workers',
-                 feat_stage, hmp_index, omp_index, batch_size)
+                 feat_stage, hmp_index, omp_index, inter_mode, batch_size)
         self.worker_pool = multiprocessing.Pool(batch_size)
 
     def generate_poses(self, features):
@@ -53,13 +56,13 @@ class PostProcess(object):
         scmps = out_scales[self.feat_stage]
 
         hmps = torch.nn.functional.interpolate(  # todo: 可以只对hmps缩放，offs和scamps仍然在下采样分辨率下取
-            hmps, scale_factor=self.hmp_stride, mode="bicubic")
+            hmps, scale_factor=self.hmp_stride, mode=self.inter_mode)
         offs = torch.nn.functional.interpolate(
-            offs, scale_factor=self.off_stride, mode="bicubic")
+            offs, scale_factor=self.off_stride, mode=self.inter_mode)
 
         if self.use_scale and isinstance(scmps, torch.Tensor):
             scmps = torch.nn.functional.interpolate(
-                scmps, scale_factor=self.off_stride, mode="bicubic")
+                scmps, scale_factor=self.off_stride, mode=self.inter_mode)
         # convert torch.Tensor to numpy.ndarray
         limbs = self.limb_collect.generate_limbs(hmps, offs, scmps).cpu().numpy()
         # put grouping into Pools
@@ -77,6 +80,9 @@ def boolean_string(s):
 
 def decoder_cli(parser):
     group = parser.add_argument_group('limb collections in post-processing')
+    group.add_argument('--resize-mode', default="bicubic", choices=["bilinear", "bicubic"],
+                       type=str,
+                       help='interpolation mode in resizing the predicted heatmaps.')
     group.add_argument('--topk', default=48,
                        type=int,
                        help='select the top K responses on each heatmaps, '
@@ -176,6 +182,7 @@ def decoder_factory(args):
     return PostProcess(args.batch_size,
                        temp_dic['hmp_stride'],
                        temp_dic['omp_stride'],
+                       args.resize_mode,
                        keypoints=temp_dic['keypoints'],
                        skeleton=temp_dic['skeleton'],
                        limb_collector=limb_handler,
