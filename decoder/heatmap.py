@@ -49,8 +49,8 @@ def topK_channel(scores, K=40):  # y=0, x=1,2,3,4... may be preserved because th
     topk_ys = (topk_idxs / w)
     topk_xs = (topk_idxs % w)
 
-    #  ##########  Todo: The least squares estimate for keypoint ###########
-    # topk_ys, topk_xs = get_final_preds(scores, topk_xs, topk_ys, kernel=1)
+    #  ##########  The least squares estimate for keypoint ###########
+    topk_ys, topk_xs = get_final_preds(scores, topk_xs, topk_ys, kernel=1)
     # ##########################################
 
     return topk_scores, topk_idxs, topk_ys, topk_xs
