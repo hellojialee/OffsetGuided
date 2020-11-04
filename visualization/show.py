@@ -35,7 +35,8 @@ def draw_limb_offset(hmp, image, off, show_limb_idx, skeleton, s=5, thre=0.3):
     """
 
     hmp = cv2.resize(hmp.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
-    off = cv2.resize(off.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
+    # fixme * 4 if we generate the label on the output feature map
+    off = cv2.resize(off.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC) * 4
     connect_idx = show_limb_idx
     s = s
     joint_f, joint_t = skeleton[connect_idx]

@@ -12,9 +12,11 @@ python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-ch
 python evaluate.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/fl2_offset_sqrt_sum/PoseNet_178_epoch.pth --resume --sqrt-re --batch-size 16 --loader-workers 8 --dataset test-dev
 
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_270_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --headnets hmp omp44 --learning-rate 6.25e-5 --recount-epoch --drop-optim-state --lambdas 1 1 0.01 1 --stack-weights 0.2 1
+python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_270_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --headnets hmp omp --learning-rate 6.25e-5 --recount-epoch --drop-optim-state --lambdas 1 1 0.01 1
 
+
+# include kepoint scale regression
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_270_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --headnets hmp omp --recount-epoch --drop-optim-state --lambdas 1 1 0.001 1 --include-spread --offset-loss offset_laplace_loss --logging-output
-
 
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_132_epoch.pth --resume --weight-decay 0 --recount-epoch --drop-optim-state --include-spread --hmp-loss focal_l2_loss --offset-loss offset_laplace_loss --lambdas 1 1 0.0001 1 --drop-amp-state --debug --logging-stdout True --shut-data-logging --headnets hmp omp --batch-size 4 --lmargin 0
 evaluate: --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_271_epoch.pth --resume --sqrt-re --batch-size 16 --loader-workers 8 --dataset val --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 25 --dataset val

@@ -200,16 +200,17 @@ if __name__ == '__main__':  # for debug
             if show_image:
                 image = image.transpose((1, 2, 0))
                 image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
-                show_labels = cv2.resize(hmp.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
-                offset = cv2.resize(offset.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
+                show_hmp = cv2.resize(hmp.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
+                show_off = cv2.resize(offset.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
                 mask_miss = np.repeat(mask_miss.transpose((1, 2, 0)), 3, axis=2)
                 mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
+
                 plt.imshow(image)
-                plt.imshow(mask_miss, alpha=0.1)  # mask_all
+                plt.imshow(show_hmp[:, :, 7], alpha=0.5)  # mask_all
                 plt.show()
 
                 plt.imshow(image)  # We have manually set Opencv earlier: RGB
-                plt.imshow(show_labels[:, :, 1], alpha=0.5)  # mask_all
+                plt.imshow(show_off[:, :, 1], alpha=0.5)  # mask_all
                 plt.show()
         print("produce %d samples per second: " % (batch / (time() - start)))  # about 70~80 FPS on MBP-13
 

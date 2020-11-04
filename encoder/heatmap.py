@@ -16,8 +16,8 @@ class HeatMaps(object):
         input_size (int, list): the input image size of (w, h) or square length.
         include_background (bool): include the reversed background heatmap or not
     """
-    clip_thre = 0.01  # Gaussian distribution below this value will be set to zero
-    sigma = 9  # standard deviation of Gaussian distribution
+    clip_thre = 0.02  # Gaussian distribution below this value will be set to zero
+    sigma = 3  # standard deviation of Gaussian distribution
     n_keypoints = 17
     keypoints = COCO_KEYPOINTS
     include_background = True  # background heatmap
@@ -97,7 +97,7 @@ class HeatMapGenerator(object):
         self.gaussian_clip_thre = clip_thre
         # get the gaussian peak spread
         self.gaussian_size = 2 * math.ceil(
-            (math.sqrt(-self.double_sigma2 * math.log(self.gaussian_clip_thre))) / stride)
+            math.sqrt(-self.double_sigma2 * math.log(self.gaussian_clip_thre)))
         assert self.gaussian_clip_thre > 0 and self.gaussian_size > 0, 'should bigger than zero'
         # cached common parameters which same for all iterations and all pictures
         self.out_w = self.in_w // stride
@@ -107,8 +107,8 @@ class HeatMapGenerator(object):
                   self.in_w, self.in_h, self.out_w, self.out_h)
 
         # mapping coordinates into original input with cell center alignment.
-        self.grid_x = np.arange(self.out_w) * stride + stride / 2 - 0.5  # x -> width
-        self.grid_y = np.arange(self.out_h) * stride + stride / 2 - 0.5  # y -> height
+        self.grid_x = np.arange(self.out_w)  # * stride + stride / 2 - 0.5  # x -> width
+        self.grid_y = np.arange(self.out_h)  # * stride + stride / 2 - 0.5  # y -> height
 
     def create_heatmaps(self, joints, meta):
         """
@@ -164,8 +164,8 @@ class HeatMapGenerator(object):
             slice_x = slice(x_min, x_max + 1)
             slice_y = slice(y_min, y_max + 1)
 
-            disk_x = self.grid_x[slice_x].astype(np.float32) - joints[i, 0]
-            disk_y = self.grid_y[slice_y].astype(np.float32) - joints[i, 1]
+            disk_x = self.grid_x[slice_x].astype(np.float32) - joints[i, 0] / self.stride
+            disk_y = self.grid_y[slice_y].astype(np.float32) - joints[i, 1] / self.stride
             exp_x = np.exp(- disk_x ** 2 / np.array([self.double_sigma2]).astype(np.float32))
             exp_y = np.exp(- disk_y ** 2 / np.array([self.double_sigma2]).astype(np.float32))
 

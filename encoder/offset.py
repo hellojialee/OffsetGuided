@@ -90,8 +90,8 @@ class OffsetMapGenerator(object):
                   self.in_w, self.in_h, self.out_w, self.out_h)
 
         # mapping coordinates into original input with cell center alignment.
-        self.grid_x = np.arange(self.out_w) * stride + stride / 2 - 0.5  # x -> width
-        self.grid_y = np.arange(self.out_h) * stride + stride / 2 - 0.5  # y -> height
+        self.grid_x = np.arange(self.out_w)  # * stride + stride / 2 - 0.5  # x -> width
+        self.grid_y = np.arange(self.out_h)  # * stride + stride / 2 - 0.5  # y -> height
 
     def create_offsetmaps(self, joints, meta):
         # print(joints.shape)  # e.g. (5, 17, 3)
@@ -171,9 +171,9 @@ class OffsetMapGenerator(object):
             slice_x = slice(x_min, x_max + 1)
             slice_y = slice(y_min, y_max + 1)
 
-            offset_x = (joint2[0] - self.grid_x[slice_x].astype(np.float32))  # type: np.ndarray
+            offset_x = (joint2[0] / self.stride - self.grid_x[slice_x].astype(np.float32))  # type: np.ndarray
             # joint2[i, 1] -> y
-            offset_y = (joint2[1] - self.grid_y[slice_y].astype(np.float32))
+            offset_y = (joint2[1] / self.stride - self.grid_y[slice_y].astype(np.float32))
             offset_x_mesh = np.repeat(offset_x.reshape(1, -1), offset_y.shape[0], axis=0)
             offset_y_mesh = np.repeat(offset_y.reshape(-1, 1), offset_x.shape[0], axis=1)
             offset_mesh = np.concatenate(

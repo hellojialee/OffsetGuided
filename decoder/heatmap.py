@@ -37,20 +37,20 @@ def hmp_NMS(heat, kernel=3):  # , thre=0.001
     return heat * keep_mask
 
 
-def topK_channel(scores, K=40):  # y=0, x=1,2,3,4... may be preserved because the lack of high peaks
+def topK_channel(filtered_scores, hmps, K=40):  # y=0, x=1,2,3,4... may be preserved because the lack of high peaks
     """
     Collect top K peaks and corresponding coordinates on each heatmap channel.
 
     Notes:
         Top K may include very small even zero responses!
     """
-    n, c, h, w = scores.shape
-    topk_scores, topk_idxs = torch.topk(scores.view(n, c, -1), K)
+    n, c, h, w = filtered_scores.shape
+    topk_scores, topk_idxs = torch.topk(filtered_scores.view(n, c, -1), K)
     topk_ys = (topk_idxs / w)
     topk_xs = (topk_idxs % w)
 
     #  ##########  The least squares estimate for keypoint ###########
-    topk_ys, topk_xs = get_final_preds(scores, topk_xs, topk_ys, kernel=1)
+    # topk_ys, topk_xs = get_final_preds(hmps, topk_xs, topk_ys, kernel=1, sigma=3)
     # ##########################################
 
     return topk_scores, topk_idxs, topk_ys, topk_xs
@@ -61,17 +61,18 @@ def joint_dets(hmps, k):
     t0 = time.time()
     filtered_hmps = hmp_NMS(hmps)
     # shape of hm_score, hm_inds, topk_ys, topk_xs = [batch, 17, topk]
-    dets = topK_channel(filtered_hmps, K=k)
+    dets = topK_channel(filtered_hmps, hmps, K=k)
     LOG.debug('TopK keypoint detection time: %.6fs', time.time() - t0)
 
     return dets
 
 
-def get_point(hm,coords,k,sigma=9):
+def get_point(hm,coords,k,sigma):
     theta = 1
     A = []
     B = []
     W = []
+    temp = hm[coords[1], coords[0]]
     for i in range(2*k+1):
         for j in range(2*k+1):
             py = coords[1] - k
@@ -81,7 +82,7 @@ def get_point(hm,coords,k,sigma=9):
             if(min(hm.shape[1] - px-1 , px , hm.shape[0] - py-1 , py)<0 ):
                     continue
             A.append(np.array([1,-2*px,1,-2*py  ]))
-            hm[py][px] = max(min(hm[py][px],1),1e-8)
+            hm[py][px] = max(min(hm[py][px],1),1e-8) / (temp + 1e-4)
             G = -2*math.log(hm[py][px])*sigma**2
             B.append(np.array([-px**2-py**2+G]))
             W.append(hm[py][px]+1)
@@ -94,11 +95,11 @@ def get_point(hm,coords,k,sigma=9):
     X = np.dot(np.dot(A.T,W),A)
     X = np.linalg.pinv(X)
     X =  np.dot(np.dot(np.dot(X,A.T),W),B)
-    coords = np.array([X[1][0],X[3][0]])
-    return coords
+    coords_refine = np.array([X[1][0],X[3][0]])
+    return coords_refine
 
 
-def get_final_preds(batch_heatmaps, topk_xs0, topk_ys0, kernel=2):
+def get_final_preds(batch_heatmaps, topk_xs0, topk_ys0, kernel=1, sigma=3):
     batch_heatmaps = batch_heatmaps.cpu().numpy()
     topk_xs = topk_xs0.cpu().numpy()[..., np.newaxis]
     topk_ys = topk_ys0.cpu().numpy()[..., np.newaxis]
@@ -117,7 +118,7 @@ def get_final_preds(batch_heatmaps, topk_xs0, topk_ys0, kernel=2):
                 px = int(round(coords[n][p][j][0]))
                 py = int(round(coords[n][p][j][1]))
                 # k = min(heatmap_width - px-1 , px , heatmap_height-py-1  , py,2)
-                coords[n][p][j] = get_point(hm,np.array([px,py]),kernel)
+                coords[n][p][j] = get_point(hm,np.array([px,py]),kernel, sigma)
                 # k = 2
                 # coords[n][p] = get_point1(hm,np.array([px,py]),k)
                 # if k < px < heatmap_width-k and k < py < heatmap_height-k:   #对求出的最大值的点作微分
@@ -125,5 +126,5 @@ def get_final_preds(batch_heatmaps, topk_xs0, topk_ys0, kernel=2):
                 # elif 1 < px < heatmap_width-1 and 1 < py < heatmap_height-1:
                 #     coords[n][p] = get_point1(hm,np.array([px,py]))
 
-    return torch.tensor(np.squeeze(topk_ys), device=topk_ys0.device), \
-           torch.tensor(np.squeeze(topk_xs), device=topk_xs0.device)
+    return torch.tensor(coords[..., 1], device=topk_ys0.device), \
+           torch.tensor(coords[..., 0], device=topk_xs0.device)

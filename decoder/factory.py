@@ -55,14 +55,15 @@ class PostProcess(object):
         offs = out_offsets[self.feat_stage]
         scmps = out_scales[self.feat_stage]
 
-        hmps = torch.nn.functional.interpolate(  # todo: 可以只对hmps缩放，offs和scamps仍然在下采样分辨率下取
-            hmps, scale_factor=self.hmp_stride, mode=self.inter_mode)
-        offs = torch.nn.functional.interpolate(
-            offs, scale_factor=self.off_stride, mode=self.inter_mode)
+        # hmps = torch.nn.functional.interpolate(
+        #     hmps, scale_factor=self.hmp_stride, mode=self.inter_mode)
+        # offs = torch.nn.functional.interpolate(
+        #     offs, scale_factor=self.off_stride, mode=self.inter_mode) * 4
+        #
+        # if self.use_scale and isinstance(scmps, torch.Tensor):
+        #     scmps = torch.nn.functional.interpolate(
+        #         scmps, scale_factor=self.off_stride, mode=self.inter_mode)
 
-        if self.use_scale and isinstance(scmps, torch.Tensor):
-            scmps = torch.nn.functional.interpolate(
-                scmps, scale_factor=self.off_stride, mode=self.inter_mode)
         # convert torch.Tensor to numpy.ndarray
         limbs = self.limb_collect.generate_limbs(hmps, offs, scmps).cpu().numpy()
         # put grouping into Pools

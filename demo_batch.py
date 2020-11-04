@@ -222,7 +222,7 @@ def test(val_loader, model, criterion, epoch, processor):
             plt.imshow(hmp)
             plt.show()
 
-            dets = decoder.topK_channel(filter_map, K=50)
+            dets = decoder.topK_channel(filter_map, hmps, K=50)
 
             dets = [det.cpu().numpy() for det in dets]
             # todo: keymap改成根据image进行缩放

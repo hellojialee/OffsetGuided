@@ -52,7 +52,7 @@ def net_cli(parser):
                             'in separate channels')
 
     group = parser.add_argument_group('loss configuration')
-    group.add_argument('--lambdas', default=[1, 1, 0.01, 0.01],
+    group.add_argument('--lambdas', default=[1, 1, 0.01, 1],
                        type=float, nargs='+',
                        help='learning task scaling factors for hmp_loss, bg_hmp_loss, '
                             'offset_loss and scale_loss, directly multiplied, not averaged')
