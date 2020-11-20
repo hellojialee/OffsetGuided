@@ -171,7 +171,7 @@ class LimbsCollect(object):
         # limbs' shape=(N, L, K, 13), in which the last dim includes:
         # [x1, y1, v1, x2, y2, v2, ind1, ind2, len_delta (min_dist), len_limb, limb_score, scale1, scale2]
         # 0,    1, 2,  3,  4,  5,    6,   7,          8,                9,         10,        11,    12
-        limbs = torch.cat((kps_xys_f.float() * self.hmp_s,
+        limbs = torch.cat((kps_xys_f.float() * self.hmp_s,  # rescale to original image scale
                            kps_scores_f,
                            matched_kps_xys_t.float() * self.hmp_s,
                            matched_kps_score_t,

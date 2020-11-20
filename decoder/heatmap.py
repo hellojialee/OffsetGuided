@@ -50,7 +50,7 @@ def topK_channel(filtered_scores, hmps, K=40):  # y=0, x=1,2,3,4... may be prese
     topk_xs = (topk_idxs % w)
 
     #  ##########  The least squares estimate for keypoint ###########
-    # topk_ys, topk_xs = get_final_preds(hmps, topk_xs, topk_ys, kernel=1, sigma=3)
+    # topk_ys, topk_xs = get_final_preds(hmps, topk_xs, topk_ys, kernel=1)
     # ##########################################
 
     return topk_scores, topk_idxs, topk_ys, topk_xs
@@ -67,12 +67,12 @@ def joint_dets(hmps, k):
     return dets
 
 
-def get_point(hm,coords,k,sigma):
-    theta = 1
+def get_point(hm,coords,k=1):
     A = []
     B = []
-    W = []
-    temp = hm[coords[1], coords[0]]
+    xm = int(coords[0])
+    ym = int(coords[1])
+    tmp = hm[ym][xm]
     for i in range(2*k+1):
         for j in range(2*k+1):
             py = coords[1] - k
@@ -81,30 +81,28 @@ def get_point(hm,coords,k,sigma):
             py = (py+j).astype(int)
             if(min(hm.shape[1] - px-1 , px , hm.shape[0] - py-1 , py)<0 ):
                     continue
-            A.append(np.array([1,-2*px,1,-2*py  ]))
-            hm[py][px] = max(min(hm[py][px],1),1e-8) / (temp + 1e-4)
-            G = -2*math.log(hm[py][px])*sigma**2
-            B.append(np.array([-px**2-py**2+G]))
-            W.append(hm[py][px]+1)
-    A = np.array(A)
-    B = np.array(B)
-    I = np.eye(len(W))
-    for c in range(I.shape[0]):
-        I[c][c] = W[c]
-    W = I
-    X = np.dot(np.dot(A.T,W),A)
-    X = np.linalg.pinv(X)
-    X =  np.dot(np.dot(np.dot(X,A.T),W),B)
-    coords_refine = np.array([X[1][0],X[3][0]])
-    return coords_refine
+            hm[py][px] /= tmp
+            hm[py][px] = max(min(hm[py][px],1),1e-8)
+            A.append(np.array([2*xm-2*px, 2*ym-2*py, 2*math.log(hm[py][px]) ]))
+            B.append(np.array([xm**2+ym**2-px**2-py**2]))
+    if(len(A)<2):
+        return coords
+    else:
+        A = np.array(A)
+        B = np.array(B)
+        X = np.dot(A.T,A)
+        X = np.linalg.pinv(X)
+        X =  np.dot(np.dot(X,A.T),B)
+        coords = np.array([X[0][0],X[1][0]])
+        return coords
 
 
-def get_final_preds(batch_heatmaps, topk_xs0, topk_ys0, kernel=1, sigma=3):
+def get_final_preds(batch_heatmaps, topk_xs0, topk_ys0, kernel=1):
     batch_heatmaps = batch_heatmaps.cpu().numpy()
     topk_xs = topk_xs0.cpu().numpy()[..., np.newaxis]
     topk_ys = topk_ys0.cpu().numpy()[..., np.newaxis]
 
-    coords= np.concatenate((topk_xs, topk_ys), axis=-1)
+    coords = np.concatenate((topk_xs, topk_ys), axis=-1)
 
     # heatmap_height = batch_heatmaps.shape[2]
     # heatmap_width = batch_heatmaps.shape[3]
@@ -118,7 +116,7 @@ def get_final_preds(batch_heatmaps, topk_xs0, topk_ys0, kernel=1, sigma=3):
                 px = int(round(coords[n][p][j][0]))
                 py = int(round(coords[n][p][j][1]))
                 # k = min(heatmap_width - px-1 , px , heatmap_height-py-1  , py,2)
-                coords[n][p][j] = get_point(hm,np.array([px,py]),kernel, sigma)
+                coords[n][p][j] = get_point(hm, np.array([px, py]), kernel)
                 # k = 2
                 # coords[n][p] = get_point1(hm,np.array([px,py]),k)
                 # if k < px < heatmap_width-k and k < py < heatmap_height-k:   #对求出的最大值的点作微分
