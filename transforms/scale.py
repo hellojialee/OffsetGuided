@@ -86,6 +86,7 @@ class RescaleAbsolute(Preprocess):
 
         this_long_edge = self.long_edge
         if isinstance(this_long_edge, (tuple, list)):
+            # This cloud raise a BUG during inference! You can not use tuple lengths during testing!
             this_long_edge = int(torch.randint(this_long_edge[0], this_long_edge[1], (1,)).item())
 
         s = this_long_edge / max(h, w)  # 缩放系数
@@ -93,4 +94,23 @@ class RescaleAbsolute(Preprocess):
             target_w, target_h = int(w * s), this_long_edge
         else:
             target_w, target_h = this_long_edge, int(h * s)
+        return _scale(image, anns, meta, mask_miss, target_w, target_h, self.mode)
+
+
+class RescaleHighAbsolute(Preprocess):
+    def __init__(self, height_edge, *, resample=cv2.INTER_CUBIC):
+        self.height_edge = height_edge
+        self.mode = resample
+        LOG.info('You chose to rescale the height of the input image')
+
+    def __call__(self, image, anns, meta, mask_miss=None):
+        if mask_miss is not None:
+            warnings.warn('mask_miss transformation is not implemented')
+
+        h, w = image.shape[:2]
+
+        s = self.height_edge / h  # 缩放系数
+
+        target_w, target_h = int(w * s), int(self.height_edge)
+
         return _scale(image, anns, meta, mask_miss, target_w, target_h, self.mode)

@@ -31,7 +31,7 @@ except ImportError:
     raise ImportError(
         "Please install apex from https://www.github.com/nvidia/apex to run this example.")
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "1"  # choose the available GPUs
+os.environ['CUDA_VISIBLE_DEVICES'] = "2"  # choose the available GPUs
 
 LOG = logging.getLogger(__name__)
 
@@ -139,9 +139,10 @@ def run_images():
     args.world_size = 1
 
     if args.batch_size == 1:
+        # when batch_size=1, we instead resize the image by its height
         preprocess_transformations = [
             transforms.NormalizeAnnotations(),
-            transforms.RescaleAbsolute(args.long_edge),
+            transforms.RescaleHighAbsolute(args.long_edge),
             transforms.RightDownPad(args.max_stride),
         ]
     else:
