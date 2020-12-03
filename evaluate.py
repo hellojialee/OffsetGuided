@@ -5,6 +5,7 @@ import logging
 import cv2
 import matplotlib.pyplot as plt
 import time
+import warnings
 import datetime
 import numpy as np
 import json
@@ -75,7 +76,8 @@ def evaluate_cli():
     parser.add_argument('--batch-size', default=8, type=int,
                         help='batch size')
     parser.add_argument('--long-edge', default=640, type=int,
-                        help='long edge of input images')
+                        help='long edge of input images, '
+                             'but we will resize images to the fixed height if batch_size=1')
     parser.add_argument('--loader-workers', default=8, type=int,
                         help='number of workers for data loading')
     parser.add_argument('--all-images', default=False, action='store_true',
@@ -91,7 +93,7 @@ def evaluate_cli():
 
     group = parser.add_argument_group('apex configuration')
     group.add_argument("--local_rank", default=0, type=int)
-    group.add_argument('--opt-level', type=str, default='O2')
+    group.add_argument('--opt-level', type=str, default='O2')  # 全精度O0
     group.add_argument('--keep-batchnorm-fp32', type=str, default=None)
     group.add_argument('--loss-scale', type=str, default=None)  # '1.0'
     group.add_argument('--channels-last', default=False, action='store_true',
@@ -140,6 +142,8 @@ def run_images():
 
     if args.batch_size == 1:
         # when batch_size=1, we instead resize the image by its height
+        LOG.warning('you fix the height of the input image')
+        warnings.warn('setting batch size to 1 means you resize the image by the fixed height')
         preprocess_transformations = [
             transforms.NormalizeAnnotations(),
             transforms.RescaleHighAbsolute(args.long_edge),

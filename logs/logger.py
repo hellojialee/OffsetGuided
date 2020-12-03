@@ -1,15 +1,10 @@
 """Detailed logger"""
 import sys
 import logging
+from utils.util import boolean_string
 
 
 LOG = logging.getLogger(__name__)
-
-
-def boolean_string(s):
-    if s not in {'False', 'True'}:
-        raise ValueError('Not a valid boolean string')
-    return s == 'True'
 
 
 def cli(parser):
@@ -47,7 +42,7 @@ def configure(args):
     # if no name if given, then name will be root;
     # if we give the name such as myfolder,
     # then other loggers under myfolder is controlled by this current log_level
-    logger = logging.getLogger('')
+    logger = logging.getLogger('')  # control level at the top root
     logger.setLevel(log_level)
 
     if args.logging_stdout:

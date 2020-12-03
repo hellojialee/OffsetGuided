@@ -87,7 +87,8 @@ def train_cli():
                        choices=['sgd', 'adam'])
     group.add_argument('--learning-rate', type=float, default=2.5e-4,
                        metavar='LR',
-                       help='learning rate')
+                       help='learning rate in 1 world size, '
+                            'thus, the actual LR will learning_rate * world_size')
     group.add_argument('--momentum', default=0.9, type=float, metavar='M',
                        help='momentum for sgd')
     group.add_argument('--weight-decay', '--wd', default=0, type=float,
@@ -153,7 +154,7 @@ def main():
 
     preprocess_transformations = [
         transforms.NormalizeAnnotations(),
-        # to compensate the coordinate shifting during transforms
+        # to compensate the coordinate shifting during transforms FIXME: 应该保留还是去除？
         transforms.RandomApply(transforms.AnnotationJitter(shift=1), 0.2),
         transforms.WarpAffineTransforms(args.square_length, aug_params=args,
                                         debug_show=False),

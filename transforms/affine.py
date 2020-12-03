@@ -17,7 +17,8 @@ def _roi_center(anns, meta):
     """
     if not len(anns):
         return meta['width_height'].astype(np.float32) // 2
-
+    # FIXME: 更新裁剪的范围，使得不会出现大量无效的学习区域，并且随机增强平移情况变多
+             # 当ROI有效长度大于long_edge市裁剪，否则不裁剪？？
     min_x = np.min(anns[anns[:, :, 2] > 0, 0])
     min_y = np.min(anns[anns[:, :, 2] > 0, 1])
     max_x = np.max(anns[anns[:, :, 2] > 0, 0])
@@ -35,6 +36,8 @@ class FixedAugParams(object):
         self._min_scale = 1.
         self._max_scale = 1.
         self._max_translate = 0.
+        self._min_stretch = 1.
+        self._max_stretch = 1.
 
     @property
     def flip_prob(self):
@@ -52,6 +55,14 @@ class FixedAugParams(object):
     @property
     def max_scale(self):
         return self._max_scale
+
+    @property
+    def min_stretch(self):
+        return self._min_stretch
+
+    @property
+    def max_stretch(self):
+        return self._max_stretch
 
     @property
     def max_translate(self):
@@ -79,6 +90,8 @@ class WarpAffineTransforms(Preprocess):
         self.max_rotate = aug_params.max_rotate
         self.min_scale = aug_params.min_scale
         self.max_scale = aug_params.max_scale
+        self.min_stretch = aug_params.min_stretch
+        self.max_stretch = aug_params.max_stretch
         self.max_translate = aug_params.max_translate
 
         self.flip = False
@@ -86,6 +99,8 @@ class WarpAffineTransforms(Preprocess):
         self.scale = 1.
         self.x_offset = 0
         self.y_offset = 0
+        self.x_stretch = 1
+        self.y_stretch = 1
 
         self.crop_roi = crop_roi
         self.debug_show = debug_show
@@ -103,6 +118,11 @@ class WarpAffineTransforms(Preprocess):
         self.scale = (self.max_scale - self.min_scale
                       ) * random.uniform(0., 1.) + self.min_scale
 
+        self.x_stretch = (self.max_stretch - self.min_stretch
+                          ) * random.uniform(0., 1.) + self.min_stretch
+        self.y_stretch = (self.max_stretch - self.min_stretch
+
+                          ) * random.uniform(0., 1.) + self.min_stretch
         self.x_offset = int(random.uniform(-1., 1.) * self.max_translate)
         self.y_offset = int(random.uniform(-1., 1.) * self.max_translate)
 
@@ -110,14 +130,17 @@ class WarpAffineTransforms(Preprocess):
         anns = copy.deepcopy(anns)
 
         roi_center = _roi_center(anns, meta)
+        # compute the transform matrix for image and keypoints
         affine_mat = self._get_affine_mat(roi_center, meta)
         M = affine_mat[0:2]
 
+        # fill mean RGB values  255* array([0.485, 0.456, 0.406]), and
+        # during training, torchvision.transforms.transforms.Normalize will subtract to zero.
         image = cv2.warpAffine(image, M,
                                (self.in_size[1], self.in_size[0]),
                                flags=cv2.INTER_CUBIC,
                                borderMode=cv2.BORDER_CONSTANT,
-                               borderValue=(124, 116, 104))  # fill mean RGB values  255* array([0.485, 0.456, 0.406])
+                               borderValue=(124, 116, 104))
         if mask_miss is not None:
             mask_miss = self._affine_mask_miss(M, mask_miss)
 
@@ -211,11 +234,14 @@ class WarpAffineTransforms(Preprocess):
         cangle = math.cos(self.rotate / 180. * math.pi)
         sangle = math.sin(self.rotate / 180. * math.pi)
 
+        self.scale_x = self.x_stretch * self.scale
+        self.scale_y = self.y_stretch * self.scale
+
         # coordinates start from 0 to w-1 or h-1.
         (center_x, center_y) = (meta['width_height'] - 1).astype(np.float32) / 2
         (move2roi_x, move2roi_y) = np.array((center_x, center_y)) - roi_center
-        translate_x = self.x_offset + (move2roi_x * self.scale if self.crop_roi else 0)
-        translate_y = self.y_offset + (move2roi_y * self.scale if self.crop_roi else 0)
+        translate_x = self.x_offset + (move2roi_x * self.scale_x if self.crop_roi else 0)
+        translate_y = self.y_offset + (move2roi_y * self.scale_y if self.crop_roi else 0)
 
         # shift the image center to the Origin of the coordinate system for convenient.
         center2zero = np.array([[1., 0., -center_x],
@@ -226,8 +252,8 @@ class WarpAffineTransforms(Preprocess):
                            [-sangle, cangle, 0],
                            [0, 0, 1.]])
 
-        scale = np.array([[self.scale, 0, 0],
-                          [0, self.scale, 0],
+        scale = np.array([[self.scale_x, 0, 0],
+                          [0, self.scale_y, 0],
                           [0, 0, 1.]])
 
         flip = np.array([[-1 if self.flip else 1., 0., 0.],

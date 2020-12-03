@@ -78,7 +78,8 @@ class RightDownPad(Preprocess):
 
     def __call__(self, image, anns, meta, mask_miss=None):
         if mask_miss is not None:
-            warnings.warn('mask_miss transformation is not implemented')
+            warnings.warn('mask_miss transformation is not implemented, '
+                          'cannot be used during training')
         meta = copy.deepcopy(meta)
         anns = copy.deepcopy(anns)
 

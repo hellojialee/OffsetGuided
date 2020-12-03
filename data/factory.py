@@ -85,15 +85,21 @@ def data_cli(parser):
                        help='square edge of input images')
     group.add_argument('--flip-prob', default=0.5, type=float,
                        help='the probability to flip the input image')
-    group.add_argument('--max-rotate', default=40, type=float,
+    group.add_argument('--max-rotate', default=45, type=float,  # 40
                        help='upper bound of the image rotation during augmentation')
     group.add_argument('--min-scale', default=0.5, type=float,
                        help='lower bound of the relative'
                             ' image scale during augmentation')
-    group.add_argument('--max-scale', default=1.5, type=float,
+    group.add_argument('--max-scale', default=2.0, type=float,  # 1.5
                        help='upper bound of the relative'
                             ' image scale during augmentation')
-    group.add_argument('--max-translate', default=50, type=int,
+    group.add_argument('--min-stretch', default=0.8, type=float,
+                       help='lower bound of the relative'  # leads to +0.3% AP
+                            ' image length stretch during augmentation')
+    group.add_argument('--max-stretch', default=1.2, type=float,
+                       help='upper bound of the relative'
+                            ' image length stretch during augmentation')
+    group.add_argument('--max-translate', default=150, type=int,  # 50 fixme: tune this value 避免太多无效的像素
                        help='upper bound of shitting the image during augmentation')
     group.add_argument('--debug-affine-show', default=False, action='store_true',
                        help='show the transformed image and keyooints')

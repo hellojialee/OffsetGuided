@@ -1,15 +1,10 @@
 import logging
 import torch
 from models import heads, networks, losses
+from utils.util import boolean_string
 import argparse
 
 LOG = logging.getLogger(__name__)
-
-
-def boolean_string(s):
-    if s not in {'False', 'True'}:
-        raise ValueError('Not a valid boolean string')
-    return s == 'True'
 
 
 def net_cli(parser):

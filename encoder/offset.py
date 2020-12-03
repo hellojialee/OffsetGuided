@@ -108,7 +108,6 @@ class OffsetMapGenerator(object):
         # generate offset by sampling floating point positions in the original input resolution space
         self.put_connections(feature_maps, joints)
 
-
         return offset_maps, scale_maps
 
     def put_connections(self, feature_maps, joints):

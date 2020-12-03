@@ -80,7 +80,8 @@ class RescaleAbsolute(Preprocess):
 
     def __call__(self, image, anns, meta, mask_miss=None):
         if mask_miss is not None:
-            warnings.warn('mask_miss transformation is not implemented')
+            warnings.warn('mask_miss transformation is not implemented,'
+                          ' cannot be used during training')
 
         h, w = image.shape[:2]
 
@@ -101,15 +102,18 @@ class RescaleHighAbsolute(Preprocess):
     def __init__(self, height_edge, *, resample=cv2.INTER_CUBIC):
         self.height_edge = height_edge
         self.mode = resample
-        LOG.info('You chose to rescale the height of the input image')
+        LOG.info(
+            'you chose to rescale the the input image to the fixed height of %d',
+            height_edge)
 
     def __call__(self, image, anns, meta, mask_miss=None):
         if mask_miss is not None:
-            warnings.warn('mask_miss transformation is not implemented')
+            warnings.warn('mask_miss transformation is not implemented, '
+                          'cannot be used during training')
 
         h, w = image.shape[:2]
 
-        s = self.height_edge / h  # 缩放系数
+        s = self.height_edge / h
 
         target_w, target_h = int(w * s), int(self.height_edge)
 

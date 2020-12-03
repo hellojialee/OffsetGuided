@@ -1,6 +1,13 @@
 import numpy as np
 
 
+def boolean_string(s):
+    """Enable {'False', 'True'} string args in command line"""
+    if s not in {'False', 'True'}:
+        raise ValueError('Not a valid boolean string')
+    return s == 'True'
+
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
 
@@ -21,12 +28,12 @@ def adjust_learning_rate(learning_rate, world_size, optimizer,
                          epoch, step, len_epoch, use_warmup=False):
     factor = epoch // 15
 
-    if epoch >= 78:
-        factor = (epoch - 78) // 5
+    if epoch >= 60:
+        factor = (epoch - 60) // 5
 
     lr = learning_rate * world_size * (0.2 ** factor)
 
-    if epoch > 50:  # FIXME
+    if epoch > 50:  # FIXME: change the LR schedule
         lr = 2e-5
 
     """Warmup the learning rate"""

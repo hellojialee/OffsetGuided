@@ -6,6 +6,7 @@ import torch
 import numpy as np
 import multiprocessing
 import decoder
+from utils.util import boolean_string
 from config.coco_data import (COCO_KEYPOINTS,
                               COCO_PERSON_SKELETON,
                               COCO_PERSON_WITH_REDUNDANT_SKELETON,
@@ -57,11 +58,12 @@ class PostProcess(object):
 
         hmps = torch.nn.functional.interpolate(  # todo: 可以只对hmps缩放，offs和scamps仍然在下采样分辨率下取
             hmps, scale_factor=self.hmp_stride, mode=self.inter_mode)
+        # it's fine to resize offset only use 'bilinear'
         offs = torch.nn.functional.interpolate(
-            offs, scale_factor=self.off_stride, mode=self.inter_mode)
+            offs, scale_factor=self.off_stride, mode='bilinear')
 
         if self.use_scale and isinstance(scmps, torch.Tensor):
-            scmps = torch.nn.functional.interpolate(
+            scmps = torch.nn.functional.interpolate(  # optimize： scale或许不需要
                 scmps, scale_factor=self.off_stride, mode=self.inter_mode)
         # convert torch.Tensor to numpy.ndarray
         limbs = self.limb_collect.generate_limbs(hmps, offs, scmps).cpu().numpy()
@@ -72,17 +74,11 @@ class PostProcess(object):
         return batch_poses
 
 
-def boolean_string(s):
-    if s not in {'False', 'True'}:
-        raise ValueError('Not a valid boolean string')
-    return s == 'True'
-
-
 def decoder_cli(parser):
     group = parser.add_argument_group('limb collections in post-processing')
     group.add_argument('--resize-mode', default="bicubic", choices=["bilinear", "bicubic"],
                        type=str,
-                       help='interpolation mode in resizing the predicted heatmaps.')
+                       help='interpolation mode for resizing the keypoint heatmaps.')
     group.add_argument('--topk', default=48,
                        type=int,
                        help='select the top K responses on each heatmaps, '
@@ -99,16 +95,18 @@ def decoder_cli(parser):
                        help='use the inferred feature maps at this stage to generate results')
 
     group = parser.add_argument_group('greedy grouping in post-processing')
-    group.add_argument('--person-thre', default=0.08,
+    group.add_argument('--person-thre', default=0.06,
                        type=float,
-                       help='threshold for pose instance scores.')
+                       help='threshold for pose instance scores, '
+                            'but COCO evaluates the top k instances')
     group.add_argument('--sort-dim', default=2, choices=[2, 4],
                        type=int,
                        help='sort the person poses by the values at the this axis.'
                             ' 2th dim means keypoints score, 4th dim means limb score.')
     group.add_argument('--dist-max', default=20, type=float,
                        help='abandon limbs with delta offsets bigger than dist_max, '
-                            'only useful when keypoint scales are not used.')
+                            'only useful when keypoint scales are not used because use-scale'
+                            'will overlap the smaller dist-max')
     group.add_argument('--use-scale', default=True, type=boolean_string,
                        help='only effective when we set --include-scale in the network'
                             'use the inferred keypoint scales as the criterion '

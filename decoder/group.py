@@ -1,4 +1,4 @@
-"""Greedily group the keypoints based on guiding (associative) offsets"""
+"""Greedily group the keypoints based on guiding (associative) offsets in ONE image"""
 import logging
 import time
 import random
@@ -15,7 +15,7 @@ LOG = logging.getLogger(__name__)
 
 class GreedyGroup(object):
     """
-    Greedily group the limbs into individual human skeletons in one image.
+    Greedily group the limbs into individual human skeletons in ONE image.
 
     Args:
         person_thre (float): threshold of pose instance scores to filter individual poses.
@@ -38,10 +38,11 @@ class GreedyGroup(object):
 
     def group_skeletons(self, limbs):
         """
-        Group all candidate limbs into individual human poses.
+        Group all candidate limbs in a single image into individual human poses.
+        This is not a batch-input operation!
 
         Args:
-            limbs (np.ndarray): (L, K, 10), includes all limbs in the same image.
+            limbs (np.ndarray): (L, K, 10), includes all limbs from the same image.
 
         Returns:
             subset of keypoints (np.ndarray): shape [M * [ 17 * [x, y, v, s, limb_score, ind]]]
@@ -121,7 +122,7 @@ class GreedyGroup(object):
             M_inds, K_inds = ((mask_sum == 1) & replace_mask).nonzero()
             if len(M_inds):
                 # fixme: 有可能后来的冗余limb把一些点强行塞给了某些人，因为我们通过delete_conns只能保证endpoint只使用一次，
-                  # 不能保证它们又作为startpoint在之后的limb循环中被重复使用，是不是可以通过skeleton定义limb连接方向避免该问题
+                #  不能保证它们又作为startpoint在之后的limb循环中被重复使用，是不是可以通过skeleton定义limb连接方向避免该问题
                 subset[M_inds, jtype_f, -1] = limb_inds[K_inds, 0]
                 subset[M_inds, jtype_t, -1] = limb_inds[K_inds, 1]
                 subset[M_inds, jtype_f, :4] = xyvs1[K_inds]
@@ -209,7 +210,7 @@ class GreedyGroup(object):
                 [x1, y1, v1, x2, y2, v2, ind1, ind2, len_delta, len_limb, limb_score, scale1, scale2]
                 # 0,  1, 2,  3,  4,  5,    6,   7,      8,         9,        10,        11,    12
         """
-        conns = conns[np.argsort(-conns[:, 10])]  # -1: sort by limb_scores
+        conns = conns[np.argsort(-conns[:, 10])]  # 10: sort by limb_scores
         repeat_check = []
         unique_list = []
         for j, ind_t in enumerate(conns[:, 7].astype(int)):

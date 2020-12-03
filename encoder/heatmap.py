@@ -17,7 +17,7 @@ class HeatMaps(object):
         include_background (bool): include the reversed background heatmap or not
     """
     clip_thre = 0.01  # Gaussian distribution below this value will be set to zero
-    sigma = 9  # standard deviation of Gaussian distribution
+    sigma = 7  # a little better thant 9; standard deviation of Gaussian distribution
     n_keypoints = 17
     keypoints = COCO_KEYPOINTS
     include_background = True  # background heatmap
