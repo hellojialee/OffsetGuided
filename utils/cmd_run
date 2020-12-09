@@ -27,4 +27,4 @@ python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-ch
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_93_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --headnets hmp omp --include-scale --drop-optim-state --lambdas 1 1 0.01 0.01 --fill-scale-size 7
 
 # 减小offset label范围并且减小heatmap的sigma
- python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_130_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --headnets hmp omp --include-scale --drop-optim-state --lambdas 1 1 0.01 0.01 --fill-scale-size 7 --sigma 7
+python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_222_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --headnets hmp omp --drop-optim-state --lambdas 1 1 0.01 0.01 --fill-scale-size 7 --sigma 7

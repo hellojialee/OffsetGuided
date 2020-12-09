@@ -190,9 +190,10 @@ class OffsetMapsLoss(object):
 
         for stack_i, (pred_off, pred_spread, pred_s) in enumerate(
                 zip(pred_off_stacks, pred_spread_stacks, pred_scale_stacks)):
-            inter1 = self.off_loss(pred_off, gt_off, pred_spread, mask_miss)
+            inter1 = self.off_loss(pred_off, gt_off, pred_spread, mask_miss)  # inter1 >= 0
+
             if self.sqrt_re:
-                inter1 = torch.sqrt(inter1 + MARGIN)  # type: torch.Tensor # todo: tune the MARGIN?
+                inter1 = torch.sqrt(inter1 + MARGIN)  # type: torch.Tensor
             weighted_offloss = torch.mul(inter1.sum(), self.stack_weights[stack_i])
             out1.append(weighted_offloss)
 

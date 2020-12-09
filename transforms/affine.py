@@ -17,8 +17,7 @@ def _roi_center(anns, meta):
     """
     if not len(anns):
         return meta['width_height'].astype(np.float32) // 2
-    # FIXME: 更新裁剪的范围，使得不会出现大量无效的学习区域，并且随机增强平移情况变多
-             # 当ROI有效长度大于long_edge市裁剪，否则不裁剪？？
+
     min_x = np.min(anns[anns[:, :, 2] > 0, 0])
     min_y = np.min(anns[anns[:, :, 2] > 0, 1])
     max_x = np.max(anns[anns[:, :, 2] > 0, 0])

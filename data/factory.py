@@ -99,7 +99,8 @@ def data_cli(parser):
     group.add_argument('--max-stretch', default=1.2, type=float,
                        help='upper bound of the relative'
                             ' image length stretch during augmentation')
-    group.add_argument('--max-translate', default=150, type=int,  # 50 fixme: tune this value 避免太多无效的像素
+    # bigger shift can produce cropped persons
+    group.add_argument('--max-translate', default=150, type=int,  # 50
                        help='upper bound of shitting the image during augmentation')
     group.add_argument('--debug-affine-show', default=False, action='store_true',
                        help='show the transformed image and keyooints')

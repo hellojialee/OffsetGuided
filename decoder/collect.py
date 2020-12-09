@@ -165,7 +165,7 @@ class LimbsCollect(object):
         # ########################################################################
         len_limbs = torch.clamp((kps_xys_f.float() - matched_kps_xys_t.float()
                                  ).norm(dim=-1, keepdim=True), min=self.min_len)  # (N, L, K, 1)
-        #Is torch.exp(-min_dist / kps_scales_t) more sensible? --No, this leads 0.5 AP drop
+        # Is torch.exp(-min_dist / kps_scales_t) more sensible? --No, this leads 0.5 AP drop
         limb_scores = kps_scores_f * matched_kps_score_t * torch.exp(-min_dist / len_limbs)
         # len_limb may be 0, t = min_dist / (len_limbs + 1e-4)
         # limbs' shape=(N, L, K, 13), in which the last dim includes:
