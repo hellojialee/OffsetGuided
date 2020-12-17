@@ -7,6 +7,7 @@ import numpy as np
 import multiprocessing
 import decoder
 from utils.util import boolean_string
+import config
 from config.coco_data import (COCO_KEYPOINTS,
                               COCO_PERSON_SKELETON,
                               COCO_PERSON_WITH_REDUNDANT_SKELETON,
@@ -17,7 +18,7 @@ from config.coco_data import (COCO_KEYPOINTS,
 LOG = logging.getLogger(__name__)
 
 
-class PostProcess(object):
+class PostProcess(torch.nn.Module):
     def __init__(self, batch_size,
                  hmp_stride, off_stride,
                  inter_mode,
@@ -38,6 +39,8 @@ class PostProcess(object):
         self.omp_index = omp_index
         self.feat_stage = feat_stage
         self.use_scale = use_scale
+        self.keypoints_flips = config.heatmap_hflip(keypoints)
+        self.limbs_flips = config.offset_hflip(keypoints, skeleton)
         LOG.info('use the inferred feature maps at stage %d, '
                  'heatmap index is %d, offsetmap index is %d, '
                  'interpolate the predicted heatmaps using %s, '
@@ -45,16 +48,40 @@ class PostProcess(object):
                  feat_stage, hmp_index, omp_index, inter_mode, batch_size)
         self.worker_pool = multiprocessing.Pool(batch_size)
 
-    def generate_poses(self, features):
+    def generate_poses(self, features, flip_test=False):
         # input feature maps regress by the network
-        out_hmps, out_bghmp = features[self.hmp_index]
+        out_hmps, out_bghmp = features[self.hmp_index]  # type: torch.Tensor
 
         out_offsets, out_spreads, out_scales = features[self.omp_index]
 
         # use the inferred heatmaps at the last stage/stack
+        # but model output is FP32
         hmps = out_hmps[self.feat_stage]
         offs = out_offsets[self.feat_stage]
         scmps = out_scales[self.feat_stage]
+
+        # flip augmentation
+        if flip_test:
+            n, limbsx2, h, w = offs.size()  # (N, 2*limbs, h, w)
+            orig_hmps = hmps[:n//2, ...]
+            #  note: explicit index selection may be faster thant flip
+            #  https://github.com/pytorch/pytorch/issues/229#issuecomment-579761958
+            flip_hmps = torch.flip(hmps[n//2:, ...], [-1])
+            # hmps = torch.max(orig_hmps, flip_hmps[:, self.keypoints_flips, :, :])  # drop 2.6AP
+            hmps = (orig_hmps + flip_hmps[:, self.keypoints_flips, :, :]) / 2
+
+            offs = offs.view((n, -1, 2, h, w))  # # (N, limbs, 2, h, w)
+            orig_offs = offs[:n//2, ...]
+            reserve_offs = offs[:n//2, self.limbs_flips[1], ...].clone()
+            flip_offs = torch.flip(offs[n//2:, ...], [-1])
+            # flip the offset_x orientation
+            flip_offs[:, :, ::2, :, :] *= -1.0
+            offs = (orig_offs + flip_offs[:, self.limbs_flips[0], ...]) / 2
+            offs[:, self.limbs_flips[1], ...] = reserve_offs
+            offs = offs.view((n, -1, h, w))  # todo: 换成offset的聚合翻转后concate求4纬度向量距离
+
+            if self.use_scale and isinstance(scmps, torch.Tensor):
+                scmps = scmps[:n//2, ...]
 
         hmps = torch.nn.functional.interpolate(  # todo: 可以只对hmps缩放，offs和scamps仍然在下采样分辨率下取
             hmps, scale_factor=self.hmp_stride, mode=self.inter_mode)
@@ -63,7 +90,7 @@ class PostProcess(object):
             offs, scale_factor=self.off_stride, mode='bilinear')
 
         if self.use_scale and isinstance(scmps, torch.Tensor):
-            scmps = torch.nn.functional.interpolate(  # optimize： scale或许不需要
+            scmps = torch.nn.functional.interpolate(  # scales provide no increase to AP
                 scmps, scale_factor=self.off_stride, mode=self.inter_mode)
         # convert torch.Tensor to numpy.ndarray
         limbs = self.limb_collect.generate_limbs(hmps, offs, scmps).cpu().numpy()

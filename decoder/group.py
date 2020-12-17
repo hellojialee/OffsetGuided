@@ -59,7 +59,7 @@ class GreedyGroup(object):
         for i, ((jtype_f, jtype_t), conns) in enumerate(zip(self.skeleton, limbs)):
             LOG.debug('limbs from jtype_f %d --> jtype_t %d', jtype_f, jtype_t)
 
-            if self.use_scale:  # conns: (K, 12)
+            if self.use_scale:  # conns: (K, 12)   #  np.minimum((self.dist_max, conns[:, 12]) is bad
                 dist_valid = conns[:, 8] < np.maximum(self.dist_max, conns[:, 12])  # 12: joint_t scale
             else:  # conns: (K, 10)
                 dist_valid = conns[:, 8] < self.dist_max

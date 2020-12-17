@@ -12,6 +12,7 @@ import torch.distributed as dist
 import torchvision
 
 import data
+import config
 import transforms
 import encoder
 import models
@@ -109,8 +110,8 @@ def main():
         transforms.RandomApply(transforms.ColorTint(), 0),
         transforms.ImageTransform(torchvision.transforms.ToTensor()),
         transforms.ImageTransform(
-            torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                             std=[0.229, 0.224, 0.225])),
+            torchvision.transforms.Normalize(mean=config.data_mean,
+                                             std=config.data_std)),
     ]
     preprocess = transforms.Compose(preprocess_transformations)
 

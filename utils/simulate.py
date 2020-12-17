@@ -107,8 +107,8 @@ def run_images():
     preprocess_transformations += [
         transforms.ImageTransform(torchvision.transforms.ToTensor()),
         transforms.ImageTransform(
-            torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                             std=[0.229, 0.224, 0.225])),
+            torchvision.transforms.Normalize(mean=config.data_mean,
+                                             std=config.data_std)),
     ]
     preprocess = transforms.Compose(preprocess_transformations)
     target_transform = encoder.encoder_factory(args, args.strides)
@@ -125,6 +125,7 @@ def run_images():
 
         anno_heads = [[x.cuda(non_blocking=True) for x in pack] for pack in
                       annos]
+        # feed the ground-truth labels into the decoder, i.e., processor.generate_poses
         features = [[[anno_heads[0][0]], [None]], [[anno_heads[1][0]], [None], [None]]]
         # post-processing for generating individual poses
         batch_poses = processor.generate_poses(features)

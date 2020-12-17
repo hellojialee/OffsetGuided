@@ -26,5 +26,12 @@ python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-ch
 # 减小offset label的范围
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_93_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --headnets hmp omp --include-scale --drop-optim-state --lambdas 1 1 0.01 0.01 --fill-scale-size 7
 
+# 没有sqrt对offset进行缩放
+python -m torch.distributed.launch --nproc_per_node=2 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_222_epoch.pth --resume --weight-decay 0 --drop-optim-state --hmp-loss focal_l2_loss --lambdas 1 1 0.01 0.01 --drop-amp-state --headnets hmp omp --debug --logging-stdout True
+
 # 减小offset label范围并且减小heatmap的sigma
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_222_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --headnets hmp omp --drop-optim-state --lambdas 1 1 0.01 0.01 --fill-scale-size 7 --sigma 7
+
+
+# 添加heatmap flip augmentation during testing
+CUDA_VISIBLE_DEVICES=0 python evaluate.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_190_epoch.pth --resume --sqrt-re --batch-size 1 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 30 --long-edge 640 --flip-test --dataset test-dev --fixed-height

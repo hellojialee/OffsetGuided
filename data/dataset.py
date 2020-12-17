@@ -82,7 +82,7 @@ class CocoKeypoints(torch.utils.data.Dataset):
 
         self.ids = [image_id for image_id in self.ids
                     if has_keypoint_annotation(image_id)]
-        print('... done.')
+        print('... filter done.')
 
     def __getitem__(self, index):
         """

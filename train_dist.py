@@ -1,4 +1,5 @@
-"""Distributed training with Nvidia Apex"""
+"""Distributed training with Nvidia Apex;
+Follow https://github.com/NVIDIA/apex/blob/master/examples/imagenet/main_amp.py"""
 import argparse
 import logging
 import os
@@ -28,6 +29,7 @@ except ImportError:
     raise ImportError(
         "Please install apex from https://www.github.com/nvidia/apex to run this example.")
 
+# os.environ['CUDA_VISIBLE_DEVICES'] = "0, 2, 3"
 LOG = logging.getLogger(__name__)
 
 
@@ -167,8 +169,8 @@ def main():
 
         transforms.ImageTransform(torchvision.transforms.ToTensor()),
         transforms.ImageTransform(
-            torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                             std=[0.229, 0.224, 0.225])),
+            torchvision.transforms.Normalize(mean=config.data_mean,
+                                             std=config.data_std)),
     ]
     preprocess = transforms.Compose(preprocess_transformations)
 
@@ -458,7 +460,7 @@ def reduce_tensor(tensor):
     # tensor(334.4330, device='cuda:1'), here is cuda:  cuda:1
     # tensor(340.1970, device='cuda:0'), here is cuda:  cuda:0
     rt = tensor.clone()  # The function operates in-place.
-    dist.all_reduce(rt, op=dist.reduce_op.SUM)
+    dist.all_reduce(rt, op=dist.ReduceOp.SUM)
     rt /= args.world_size
     return rt
 

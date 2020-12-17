@@ -1,4 +1,7 @@
 """Configurations for keypoint, skeleton and keypoint jitter sigmas"""
+import logging
+
+LOG = logging.getLogger(__name__)
 
 coco_mean = [0.40789654, 0.44719302, 0.47026115]
 coco_std = [0.28863828, 0.27408164, 0.27809835]
@@ -113,16 +116,46 @@ HFLIP = {
 }
 
 
-def heatmap_hflip(keypoints, hflip):
+def heatmap_hflip(keypoints, hflip=None):
+    if hflip is None:
+        hflip = HFLIP
     flip_indices = list([
         keypoints.index(hflip[kp_name]) if kp_name in hflip else kp_i
         for kp_i, kp_name in enumerate(keypoints)
     ])
-    print(f'hflip indices: {flip_indices}')
+    LOG.debug('hflip indices: %s', flip_indices)
     return flip_indices
 
 
-def vector_hflip(keypoints, skeleton, hflip):
+def offset_hflip(keypoints, skeleton, hflip=None):
+    if hflip is None:
+        hflip = HFLIP
+    skeleton_names = [
+        (keypoints[j1], keypoints[j2])
+        for j1, j2 in skeleton
+    ]
+
+    flipped_skeleton_names = [
+        (hflip[j1] if j1 in hflip else j1, hflip[j2] if j2 in hflip else j2)
+        for j1, j2 in skeleton_names
+    ]
+    LOG.debug(f'skeleton = {skeleton_names} \n flipped_skeleton = {flipped_skeleton_names}')
+
+    flip_indices = list(range(len(skeleton)))
+    reserve_indices = []
+    for limb_i, (n1, n2) in enumerate(skeleton_names):
+        if (n1, n2) in flipped_skeleton_names:
+            flip_indices[limb_i] = flipped_skeleton_names.index((n1, n2))
+        if (n2, n1) in flipped_skeleton_names:
+            flip_indices[limb_i] = flipped_skeleton_names.index((n2, n1))
+            reserve_indices.append(limb_i)
+    LOG.debug(f'limb hflip indices: {flip_indices} \n limb reverse indices: {reserve_indices}')
+    return flip_indices, reserve_indices
+
+
+def vector_hflip(keypoints, skeleton, hflip=None):
+    if hflip is None:
+        hflip = HFLIP
     skeleton_names = [
         (keypoints[j1], keypoints[j2])
         for j1, j2 in skeleton
@@ -135,12 +168,12 @@ def vector_hflip(keypoints, skeleton, hflip):
 
     flip_indices = list(range(len(skeleton)))
     reverse_direction = []
-    for paf_i, (n1, n2) in enumerate(skeleton_names):
+    for limb_i, (n1, n2) in enumerate(skeleton_names):
         if (n1, n2) in flipped_skeleton_names:
-            flip_indices[paf_i] = flipped_skeleton_names.index((n1, n2))
+            flip_indices[limb_i] = flipped_skeleton_names.index((n1, n2))
         if (n2, n1) in flipped_skeleton_names:
-            flip_indices[paf_i] = flipped_skeleton_names.index((n2, n1))
-            reverse_direction.append(paf_i)
+            flip_indices[limb_i] = flipped_skeleton_names.index((n2, n1))
+            reverse_direction.append(limb_i)
     print(f'hflip indices: {flip_indices} \n reverse: {reverse_direction}')
     return flip_indices, reverse_direction
 
@@ -197,7 +230,7 @@ if __name__ == '__main__':
     print_associations()
     draw_skeletons()
 
-    heatmap_hflip(COCO_KEYPOINTS, HFLIP)
+    print(f'hflip indices of keypoints: {heatmap_hflip(COCO_KEYPOINTS, HFLIP)} \n')
     vector_hflip(COCO_KEYPOINTS, COCO_PERSON_SKELETON, HFLIP)
     print(REDUNDANT_CONNECTIONS)
     vector_hflip(COCO_KEYPOINTS, COCO_PERSON_WITH_REDUNDANT_SKELETON, HFLIP)

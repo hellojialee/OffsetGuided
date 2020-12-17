@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 
-def scored_offset(hmp, off, jtypes_f, jtypes_t, kernel_size=13):
+def scored_offset(hmp, off, jtypes_f, jtypes_t, kernel_size=7):
     """
     Refine offsets with the heatmap responses at start joint area.
     Args:
@@ -27,14 +27,16 @@ def scored_offset(hmp, off, jtypes_f, jtypes_t, kernel_size=13):
     offset_reshape = off.view((n, -1, 2, h, w))  # (n, limbs, 2, h, w)
     somap = score_map * offset_reshape  # (n, limbs, 2, h, w)
 
-    mean_score = nn.functional.avg_pool2d(score_map.squeeze(),
+    mean_score = nn.functional.avg_pool2d(score_map.squeeze(),  # (n, limbs, h, w)
                                           kernel_size,
                                           stride=1,
-                                          padding=(kernel_size - 1) // 2)  # (n, limbs, h, w)
-    somap_temp = nn.functional.avg_pool2d(somap.view((n, -1, h, w)),
+                                          padding=(kernel_size - 1) // 2,
+                                          divisor_override=1)  # divisor_override changes the denominator
+    somap_temp = nn.functional.avg_pool2d(somap.view((n, -1, h, w)),  # (n, limbs*2, h, w)
                                           kernel_size,
                                           stride=1,
-                                          padding=(kernel_size - 1) // 2)  # (n, limbs*2, h, w)
+                                          padding=(kernel_size - 1) // 2,
+                                          divisor_override=1)
     weighted_offset = somap_temp.view((n, -1, 2, h, w)) / (mean_score.unsqueeze(2) + 1e-6)
 
     return weighted_offset.view((n, -1, h, w))  # # (n, limbs, 2, h, w) --> (n, limbs*2, h, w)

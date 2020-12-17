@@ -59,7 +59,7 @@ class OffsetMapsHead(torch.nn.Module):
     n_keypoints = HeatMapsHead.n_keypoints
     n_skeleton = 19
     include_spread = False  # learning with uncertainty
-    include_scale = True
+    include_scale = False
 
     def __init__(self, head_name, inp_dim, n_stacks,
                  kernel_size=1, padding=0, dilation=1):
@@ -146,7 +146,7 @@ def headnets_factory(headnames, n_stacks, strides, inp_dim,
 
 
 def factory_head(head_name, n_stacks, stride, inp_dim,
-                 include_spread=False, include_background=False, include_scale=True):
+                 include_spread=False, include_background=False, include_scale=False):
     """
     Build a head network.
 
