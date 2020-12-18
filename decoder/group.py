@@ -178,10 +178,26 @@ class GreedyGroup(object):
 
         subset = self._delete_sort(subset, self.person_thre, self.sort_dim)
 
+        # subset = soft_nms(subset)  # make no difference owning to our Gaussian spread
+
         return subset  # numpy array [M * [ 17 * [x, y, v, s, limb_score, ind]]]
 
     @staticmethod
     def _delete_sort(subset, thre, index):  # todo: how about index=4? use limb_score to sort
+        """
+        Delete and sort the detected poses according to scores.
+
+        Args:
+            subset (list): detected results of shape [M * [ 17 * [x, y, v, s, limb_score, ind]]]
+                in a given image
+            thre (float): threshold to filter the poses with low scores
+            index (int): sort the person poses by the values at the this axis.
+                2th dim means keypoints score, 4th dim means limb score
+
+        Returns:
+            subset (list): detected poses in a single image
+
+        """
         t0 = time.time()
         delete_list = []
         scores_list = []
@@ -227,7 +243,7 @@ class GreedyGroup(object):
         return row_cache
 
 
-def soft_nms(subset, suppressed_v=0):
+def soft_nms(subset, suppressed_v=2):
     if not len(subset):
         return subset
 
@@ -250,7 +266,7 @@ def soft_nms(subset, suppressed_v=0):
             x = np.clip(xyv[0], 0.0, occ.shape[1] - 1).astype(int)
             y = np.clip(xyv[1], 0.0, occ.shape[0] - 1).astype(int)
             if occ[y, x]:
-                xyv[2] = suppressed_v
+                xyv[2] /= suppressed_v
             else:
                 scalar_square_add_single(occ, xyv[0], xyv[1], joint_s, 1)
     return subset

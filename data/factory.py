@@ -94,7 +94,7 @@ def data_cli(parser):
                        help='upper bound of the relative'
                             ' image scale during augmentation')
     group.add_argument('--min-stretch', default=0.8, type=float,
-                       help='lower bound of the relative'  # leads to +0.3% AP
+                       help='lower bound of the relative'  # leads to less than 0.3% AP
                             ' image length stretch during augmentation')
     group.add_argument('--max-stretch', default=1.2, type=float,
                        help='upper bound of the relative'

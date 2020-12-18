@@ -62,7 +62,7 @@ class PostProcess(torch.nn.Module):
 
         # flip augmentation
         if flip_test:
-            n, limbsx2, h, w = offs.size()  # (N, 2*limbs, h, w)
+            n, limbsx2, h, w = offs.size()  # (2*N, 2*limbs, h, w)
             orig_hmps = hmps[:n//2, ...]
             #  note: explicit index selection may be faster thant flip
             #  https://github.com/pytorch/pytorch/issues/229#issuecomment-579761958
@@ -70,18 +70,21 @@ class PostProcess(torch.nn.Module):
             # hmps = torch.max(orig_hmps, flip_hmps[:, self.keypoints_flips, :, :])  # drop 2.6AP
             hmps = (orig_hmps + flip_hmps[:, self.keypoints_flips, :, :]) / 2
 
-            offs = offs.view((n, -1, 2, h, w))  # # (N, limbs, 2, h, w)
-            orig_offs = offs[:n//2, ...]
+            # todo: 换成offset的聚合翻转后concate求4纬度向量距离
+            offs = offs.view((n, -1, 2, h, w))  # (2*N, limbs, 2, h, w)
+            orig_offs = offs[:n//2, ...]  # (N, limbs, 2, h, w)
             reserve_offs = offs[:n//2, self.limbs_flips[1], ...].clone()
             flip_offs = torch.flip(offs[n//2:, ...], [-1])
             # flip the offset_x orientation
-            flip_offs[:, :, ::2, :, :] *= -1.0
+            flip_offs[:, :, ::2, :, :] *= -1.0  # (N, limbs, 2, h, w)
             offs = (orig_offs + flip_offs[:, self.limbs_flips[0], ...]) / 2
             offs[:, self.limbs_flips[1], ...] = reserve_offs
-            offs = offs.view((n, -1, h, w))  # todo: 换成offset的聚合翻转后concate求4纬度向量距离
+            offs = offs.view((n, -1, h, w))  # (N, 2*limbs, h, w)
 
             if self.use_scale and isinstance(scmps, torch.Tensor):
-                scmps = scmps[:n//2, ...]
+                orig_scmps = scmps[:n//2, ...]
+                flip_scmps = torch.flip(scmps[n//2:], [-1])
+                scmps = (orig_scmps + flip_scmps[:, self.keypoints_flips, :, :]) / 2
 
         hmps = torch.nn.functional.interpolate(  # todo: 可以只对hmps缩放，offs和scamps仍然在下采样分辨率下取
             hmps, scale_factor=self.hmp_stride, mode=self.inter_mode)
@@ -111,7 +114,7 @@ def decoder_cli(parser):
                        help='select the top K responses on each heatmaps, '
                             'and hence leads to top K limbs of each type. '
                             'A bigger topk may not leads to better performance')
-    group.add_argument('--thre-hmp', default=0.08,
+    group.add_argument('--thre-hmp', default=0.06,
                        type=float,
                        help='candidate kepoints below this response value '
                             'are moved outside the image boarder')
