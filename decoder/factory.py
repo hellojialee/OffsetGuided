@@ -48,7 +48,7 @@ class PostProcess(torch.nn.Module):
                  feat_stage, hmp_index, omp_index, inter_mode, batch_size)
         self.worker_pool = multiprocessing.Pool(batch_size)
 
-    def generate_poses(self, features, flip_test=False):
+    def generate_poses(self, features, flip_test=False, cat_flip_offs=True):
         # input feature maps regress by the network
         out_hmps, out_bghmp = features[self.hmp_index]  # type: torch.Tensor
 
@@ -60,6 +60,7 @@ class PostProcess(torch.nn.Module):
         offs = out_offsets[self.feat_stage]
         scmps = out_scales[self.feat_stage]
 
+        vector_nd = 2
         # flip augmentation
         if flip_test:
             n, limbsx2, h, w = offs.size()  # (2*N, 2*limbs, h, w)
@@ -70,16 +71,30 @@ class PostProcess(torch.nn.Module):
             # hmps = torch.max(orig_hmps, flip_hmps[:, self.keypoints_flips, :, :])  # drop 2.6AP
             hmps = (orig_hmps + flip_hmps[:, self.keypoints_flips, :, :]) / 2
 
-            # todo: 换成offset的聚合翻转后concate求4纬度向量距离
-            offs = offs.view((n, -1, 2, h, w))  # (2*N, limbs, 2, h, w)
-            orig_offs = offs[:n//2, ...]  # (N, limbs, 2, h, w)
-            reserve_offs = offs[:n//2, self.limbs_flips[1], ...].clone()
-            flip_offs = torch.flip(offs[n//2:, ...], [-1])
-            # flip the offset_x orientation
-            flip_offs[:, :, ::2, :, :] *= -1.0  # (N, limbs, 2, h, w)
-            offs = (orig_offs + flip_offs[:, self.limbs_flips[0], ...]) / 2
-            offs[:, self.limbs_flips[1], ...] = reserve_offs
-            offs = offs.view((n, -1, h, w))  # (N, 2*limbs, h, w)
+            if cat_flip_offs:
+                # 换成offset的聚合翻转后concatenate求4纬度向量距离, drop 0.5AP
+                offs = offs.view((n, -1, 2, h, w))  # (2*N, limbs, 2, h, w)
+                orig_offs = offs[:n // 2, ...]  # (N, limbs, 2, h, w)
+                reserve_offs = offs[:n // 2, self.limbs_flips[1], ...].clone()  # (N, uniques, 2, h, w)
+                flip_offs = torch.flip(offs[n // 2:, ...], [-1])
+                # flip the offset_x orientation
+                flip_offs[:, :, ::2, :, :] *= -1.0  # (N, limbs, 2, h, w)
+                offs = torch.cat((orig_offs, flip_offs[:, self.limbs_flips[0], ...]), dim=2)  # (N, limbs, 4, h, w)
+                offs[:, self.limbs_flips[1], 2:, :] = reserve_offs
+                offs = offs.view((n, -1, h, w))  # (N, 4*limbs, h, w)
+                vector_nd = 4
+            else:
+                # flip merge of vector addition
+                offs = offs.view((n, -1, 2, h, w))  # (2*N, limbs, 2, h, w)
+                orig_offs = offs[:n//2, ...]  # (N, limbs, 2, h, w)
+                reserve_offs = offs[:n//2, self.limbs_flips[1], ...].clone()
+                flip_offs = torch.flip(offs[n//2:, ...], [-1])
+                # flip the offset_x orientation
+                flip_offs[:, :, ::2, :, :] *= -1.0  # (N, limbs, 2, h, w)
+                offs = (orig_offs + flip_offs[:, self.limbs_flips[0], ...]) / 2
+                offs[:, self.limbs_flips[1], ...] = reserve_offs
+                offs = offs.view((n, -1, h, w))  # (N, 2*limbs, h, w)
+                vector_nd = 2
 
             if self.use_scale and isinstance(scmps, torch.Tensor):
                 orig_scmps = scmps[:n//2, ...]
@@ -96,7 +111,7 @@ class PostProcess(torch.nn.Module):
             scmps = torch.nn.functional.interpolate(  # scales provide no increase to AP
                 scmps, scale_factor=self.off_stride, mode=self.inter_mode)
         # convert torch.Tensor to numpy.ndarray
-        limbs = self.limb_collect.generate_limbs(hmps, offs, scmps).cpu().numpy()
+        limbs = self.limb_collect.generate_limbs(hmps, offs, scmps, vector_nd=vector_nd).cpu().numpy()
         # put grouping into Pools
         batch_poses = self.worker_pool.starmap(
             self.limb_group.group_skeletons, zip(limbs))

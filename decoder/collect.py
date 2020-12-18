@@ -58,7 +58,8 @@ class LimbsCollect(object):
     def generate_limbs(self,
                        hmps_hr: torch.Tensor,
                        offs_hr: torch.Tensor,
-                       scmps) -> torch.Tensor:
+                       scmps,
+                       vector_nd=2) -> torch.Tensor:
         """
         Generate all candidate limbs between adjacent keypoints in the human skeleton tree,
          on the basis of the regressed heatmaps and offsetmaps
@@ -67,6 +68,7 @@ class LimbsCollect(object):
             hmps_hr (Tensor): with shape (N, C, H, W)
             offs_hr (Tensor): with shape (N, L*2, H, W)
             scmps (Tensor): (N, C, H, W), feature map of inferred keypoint scales.
+            vector_nd (int): dimension number of each offset vector
 
         Returns: a Tensor containing all candidate limbs information in a batch images (batch=N here)
         """
@@ -116,24 +118,24 @@ class LimbsCollect(object):
         # ########################################################################
         # ############### get offset vectors of all limb connections ############
         # ########################################################################
-        offs_reshape = offs_hr.view((n, -1, 2, h, w))  # (N, L, 2, H, W)
-        flat_off = offs_reshape.view((n, n_limbs, 2, -1))  # stretch and flat to (N, L, 2, H*W)
-        kps_inds_f_expand = kps_inds_f.permute((0, 1, 3, 2)).expand(-1, -1, 2, -1)  # (N, L, 2, K)
+        offs_reshape = offs_hr.view((n, -1, vector_nd, h, w))  # (N, L, 2, H, W)
+        flat_off = offs_reshape.view((n, n_limbs, vector_nd, -1))  # stretch and flat to (N, L, 2, H*W)
+        kps_inds_f_expand = kps_inds_f.permute((0, 1, 3, 2)).expand(-1, -1, vector_nd, -1)  # (N, L, 2, K)
         # (N, L, 2, K) -> (N, L, K, 2)
         kps_off_f = flat_off.gather(-1, kps_inds_f_expand).permute((0, 1, 3, 2))
 
         # ########################################################################
         # ############### get the regressed end-joints from the start-joints #########
         # ########################################################################
-        kps_guid_t = kps_xys_f + kps_off_f * self.resize_factor  # (N, L, K, 2)
+        kps_guid_t = kps_xys_f.repeat(1, 1, 1, vector_nd//2) + kps_off_f * self.resize_factor  # (N, L, K, 2)
 
         # ########################################################################
         # ############### find limbs from kps_f_lk to kps_t_lm ###############
         # ########################################################################
         # (N, L, K, M, 2)
-        kps_guid_t_expand = kps_guid_t.unsqueeze(3).expand(n, n_limbs, self.K, self.K, 2)
+        kps_guid_t_expand = kps_guid_t.unsqueeze(3).expand(n, n_limbs, self.K, self.K, vector_nd)
         # (N, L, K, M, 2)
-        kps_xys_t_expand = kps_xys_t.unsqueeze(2).expand(n, n_limbs, self.K, self.K, 2)
+        kps_xys_t_expand = kps_xys_t.repeat(1, 1, 1, vector_nd//2).unsqueeze(2).expand(n, n_limbs, self.K, self.K, vector_nd)
         dist = (kps_guid_t_expand - kps_xys_t_expand).norm(dim=-1)  # (N, L, K, M)
         """dist_min ensures one keypoint can only be used and paired once."""
         min_dist, min_ind = dist.min(dim=-1)  # 2 * (N, L, K）
