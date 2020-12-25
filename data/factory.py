@@ -178,7 +178,8 @@ if __name__ == '__main__':  # for debug
     args = parser.parse_args()
     args.headnets = ['heatmaps', 'offsets']  # NOTICE : call net_cli before encoder_cli!!
     args.include_background = True  # generate the heatmap of background
-    args.include_scale = True
+    args.include_scale = True  # generate keypoint scale
+    args.include_jitter_offset = True  # generate keypoint jitter offset
 
     log_level = logging.WARNING  # logging.INFO
     # set RootLogger
@@ -200,6 +201,8 @@ if __name__ == '__main__':  # for debug
             image = image.numpy()
             mask_miss = annos[0][-1].numpy().astype(np.float32)  # bool -> float
             hmp = annos[0][0].numpy()
+            jitter = annos[0][2].numpy()
+            jitter[np.isinf(jitter)] = 0
             offset = annos[1][0].numpy()
             offset[np.isinf(offset)] = 0
 
@@ -208,7 +211,8 @@ if __name__ == '__main__':  # for debug
                 image = image.transpose((1, 2, 0))
                 image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
                 show_labels = cv2.resize(hmp.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
-                offset = cv2.resize(offset.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
+                offset = cv2.resize(offset.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_LINEAR)
+                jitter = cv2.resize(jitter.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_LINEAR)
                 mask_miss = np.repeat(mask_miss.transpose((1, 2, 0)), 3, axis=2)
                 mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
                 plt.imshow(image)
@@ -217,6 +221,14 @@ if __name__ == '__main__':  # for debug
 
                 plt.imshow(image)  # We have manually set Opencv earlier: RGB
                 plt.imshow(show_labels[:, :, 1], alpha=0.5)  # mask_all
+                plt.show()
+
+                plt.imshow(image)  # We have manually set Opencv earlier: RGB
+                plt.imshow(jitter[:, :, 0], alpha=0.5)  # mask_all
+                plt.show()
+
+                plt.imshow(image)  # We have manually set Opencv earlier: RGB
+                plt.imshow(jitter[:, :, 1], alpha=0.5)  # mask_all
                 plt.show()
         print("produce %d samples per second: " % (batch / (time() - start)))  # about 70~80 FPS on MBP-13
 

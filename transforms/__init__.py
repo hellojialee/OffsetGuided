@@ -17,7 +17,7 @@ from .compose import Compose
 from .image import Blur, ImageTransform, JpegCompression, ColorTint, Gray
 from .pad import CenterPad, RightDownPad
 from .random import RandomApply
-from .scale import RescaleAbsolute, RescaleHighAbsolute
+from .scale import RescaleLongAbsolute, RescaleHighAbsolute
 from .affine import WarpAffineTransforms
 from .affine import FixedAugParams
 

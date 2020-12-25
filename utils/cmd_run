@@ -35,3 +35,5 @@ python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-ch
 
 # 添加heatmap flip augmentation during testing
 CUDA_VISIBLE_DEVICES=0 python evaluate.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_190_epoch.pth --resume --sqrt-re --batch-size 1 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 30 --long-edge 640 --flip-test --dataset test-dev --fixed-height
+
+python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_222_epoch.pth --resume --no-pretrain --sqrt-re --weight-decay 0 --headnets hmp omp --drop-optim-state --lambdas 1 1 0.01 0.01 --fill-scale-size 7 --sigma 7 --epochs 60 --opt-level O0  --batch-size 4 --loader-workers 4

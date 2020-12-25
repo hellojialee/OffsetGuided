@@ -12,15 +12,19 @@ class HeatMapsHead(torch.nn.Module):
     n_keypoints = 17
     include_background = False  # background heatmap
     bg_channel = 1
+    include_jitter_offset = False  # jitter offsetmaps
+    jo_channel = 2
+    include_spread = False
 
     def __init__(self, head_name, inp_dim, n_stacks,
                  kernel_size=1, padding=0, dilation=1):
         super(HeatMapsHead, self).__init__()
 
         LOG.debug('%s config: inp_dim = %d, n_stacks = %d, stride= %d, '
-                  'include background heatmap: %s, '
+                  'include background heatmap: %s, include jitter offsetmap: %s '
                   'n_keypoints = %d, kernel = %d, padding = %d, dilation = %d',
-                  head_name, inp_dim, n_stacks, self.stride, self.include_background,
+                  head_name, inp_dim, n_stacks, self.stride,
+                  self.include_background, self.include_jitter_offset,
                   self.n_keypoints, kernel_size, padding, dilation)
 
         self.head_name = head_name
@@ -35,13 +39,19 @@ class HeatMapsHead(torch.nn.Module):
                             kernel_size, padding=padding, dilation=dilation)
             if self.include_background else torch.nn.Sequential()
             for _ in range(n_stacks)])
+        self.jitter_convs = torch.nn.ModuleList([
+            torch.nn.Conv2d(inp_dim, self.jo_channel,
+                            kernel_size, padding=padding, dilation=dilation)
+            if self.include_jitter_offset else torch.nn.Sequential()
+            for _ in range(n_stacks)])
 
     def forward(self, args):
         assert len(args) == self.n_stacks, 'multiple outputs from BaseNet'
         out_hmps = []
         out_bghmp = []
+        out_jitteroffs = []
 
-        for hmp_layer, bg_layer, x in zip(self.hp_convs, self.bghp_convs, args):
+        for hmp_layer, bg_layer, jo_layer, x in zip(self.hp_convs, self.bghp_convs, self.jitter_convs, args):
             hmp = hmp_layer(x)
             out_hmps.append(hmp)
 
@@ -51,7 +61,13 @@ class HeatMapsHead(torch.nn.Module):
             else:
                 out_bghmp.append([])
 
-        return out_hmps, out_bghmp
+            if self.include_jitter_offset:
+                jitter_off = jo_layer(x)
+                out_jitteroffs.append(jitter_off)
+            else:
+                out_jitteroffs.append([])
+
+        return out_hmps, out_bghmp, out_jitteroffs
 
 
 class OffsetMapsHead(torch.nn.Module):
@@ -127,7 +143,7 @@ class OffsetMapsHead(torch.nn.Module):
 
 
 def headnets_factory(headnames, n_stacks, strides, inp_dim,
-                     include_spread, include_background, include_scale):
+                     include_spread, include_background, include_jitter, include_scale):
     """Build head networks.
 
     Args:
@@ -135,18 +151,20 @@ def headnets_factory(headnames, n_stacks, strides, inp_dim,
         n_stacks (int): base network may has multiple output tensors from all stacks.
         strides: the output strides of the base network.
         inp_dim: the tensor channels output by the base network.
+        include_jitter: include the jitter offset to the nearest keypoints
         include_spread: used in laplace loss
         include_background: add the heatmap of background
     """
 
-    headnets = [factory_head(h, n_stacks, s, inp_dim, include_spread, include_background, include_scale)
+    headnets = [factory_head(h, n_stacks, s, inp_dim, include_spread, include_background, include_jitter, include_scale)
                 for h, s in zip(headnames, strides)]
 
     return headnets
 
 
 def factory_head(head_name, n_stacks, stride, inp_dim,
-                 include_spread=False, include_background=False, include_scale=False):
+                 include_spread=False, include_background=False,
+                 include_jitter=False, include_scale=False):
     """
     Build a head network.
 
@@ -172,6 +190,7 @@ def factory_head(head_name, n_stacks, stride, inp_dim,
         HeatMapsHead.stride = stride
         HeatMapsHead.n_keypoints = n_keypoints
         HeatMapsHead.include_background = include_background
+        HeatMapsHead.include_jitter_offset = include_jitter
         return HeatMapsHead(head_name, inp_dim, n_stacks)
 
     if head_name in ('omp',
@@ -204,10 +223,9 @@ def factory_head(head_name, n_stacks, stride, inp_dim,
 
 
 if __name__ == '__main__':
-
     headnames = ['hmp', 'omp']
 
-    head_nets = headnets_factory(headnames, 2, [4, 4], 256, True, True, True)
+    head_nets = headnets_factory(headnames, 2, [4, 4], 256, True, True, True, True)
     t = id(head_nets[0].n_keypoints) == id(head_nets[1].n_keypoints)
     head_nets[1].n_keypoints = 20
     t2 = id(head_nets[0].n_keypoints) == id(head_nets[1].n_keypoints)

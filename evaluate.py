@@ -32,7 +32,7 @@ except ImportError:
     raise ImportError(
         "Please install apex from https://www.github.com/nvidia/apex to run this example.")
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "1"  # choose the available GPUs
+# os.environ['CUDA_VISIBLE_DEVICES'] = "1"  # choose the available GPUs
 
 LOG = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ def evaluate_cli():
     decoder.decoder_cli(parser)
 
     parser.add_argument('--dump-name',  # TODO: edit this name each evaluation
-                        default='hourglass104_focal_l2_epoch_194_640_input_1scale_flip_hmpoff_test',
+                        default='hourglass104_focal_l2_epoch_258_fp32_640_input_1scale_flip_hmpoff_test',
                         type=str, help='detection file name')
 
     parser.add_argument('--dataset', choices=('val', 'test', 'test-dev'), default='val',
@@ -71,6 +71,8 @@ def evaluate_cli():
                         help='resize input images to the fixed height of long_edge')
     parser.add_argument('--flip-test', action='store_true', default=False,
                         help='flip augmentation during testing')
+    parser.add_argument('--cat-flip-offset', action='store_true', default=False,
+                        help='offset flip merge of increasing to 4D vector space')
     parser.add_argument('--loader-workers', default=8, type=int,
                         help='number of workers for data loading')
     parser.add_argument('--all-images', default=False, action='store_true',
@@ -153,7 +155,7 @@ def run_images():
         LOG.info('you resize the longer edge of the input rgb_img to %d ', args.long_edge)
         preprocess_transformations = [
             transforms.NormalizeAnnotations(),
-            transforms.RescaleAbsolute(args.long_edge),
+            transforms.RescaleLongAbsolute(args.long_edge),
             transforms.CenterPad(args.long_edge),
         ]
 
@@ -200,7 +202,7 @@ def run_images():
     model.eval()
 
     batch_time = AverageMeter()
-    end = time.time()
+    end = time.time()  # Notice: CenterNet 和 pifpaf 应该没有包含数据加载的时间，所以确认一下这个计时，考虑换个位置
     for batch_idx, (images, annos, metas) in enumerate(data_loader):
 
         images = images.cuda(non_blocking=True)  # .to(memory_format=memory_format)
@@ -212,7 +214,11 @@ def run_images():
             outputs = model(images)  # outputs of multiple headnets
 
         # post-processing for generating individual poses
-        batch_poses = processor.generate_poses(outputs, flip_test=args.flip_test)
+        batch_poses = processor.generate_poses(
+            outputs,
+            flip_test=args.flip_test,
+            cat_flip_offs=args.cat_flip_offset
+        )
 
         # #########################################################################
         # ############# inverse the keypoint into the original rgb_img space ############

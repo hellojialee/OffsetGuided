@@ -73,6 +73,7 @@ def train_cli():
 
     group = parser.add_argument_group('apex configuration')
     group.add_argument("--local_rank", default=0, type=int)
+    # full precision O0  # mixture precision O1 # half precision O2
     group.add_argument('--opt-level', type=str, default='O1')
     group.add_argument('--no-sync-bn', dest='sync_bn', action='store_false',
                        default=True,
@@ -80,7 +81,7 @@ def train_cli():
     group.add_argument('--keep-batchnorm-fp32', type=str, default=None)
     group.add_argument('--loss-scale', type=str, default=None)  # '1.0'
     group.add_argument('--channels-last', default=False, action='store_true',
-                       help='channel last may lead to 22% speed up')  # fixme: channel last may lead to 22% speed up
+                       help='channel last may lead to 22% speed up')  # not implemented yet
     group.add_argument('--print-freq', '-f', default=10, type=int, metavar='N',
                        help='print frequency (default: 10)')
 

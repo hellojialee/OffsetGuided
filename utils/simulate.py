@@ -96,7 +96,7 @@ def run_images():
     preprocess_transformations = [
         transforms.NormalizeAnnotations(),
         # transforms.RandomApply(transforms.AnnotationJitter(shift=1), 0.4),
-        transforms.RescaleAbsolute(args.long_edge),
+        transforms.RescaleLongAbsolute(args.long_edge),
         transforms.CenterPad(args.long_edge),
         # transforms.RightDownPad(args.long_edge)  # CenterPad leads to higher metrics
         # transforms.WarpAffineTransforms(args.square_length, crop_roi=False,
@@ -126,7 +126,7 @@ def run_images():
         anno_heads = [[x.cuda(non_blocking=True) for x in pack] for pack in
                       annos]
         # feed the ground-truth labels into the decoder, i.e., processor.generate_poses
-        features = [[[anno_heads[0][0]], [None]], [[anno_heads[1][0]], [None], [None]]]
+        features = [[[anno_heads[0][0]], [None], [anno_heads[0][2]]], [[anno_heads[1][0]], [None], [None]]]
         # post-processing for generating individual poses
         batch_poses = processor.generate_poses(features)
 

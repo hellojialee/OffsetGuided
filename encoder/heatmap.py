@@ -21,6 +21,8 @@ class HeatMaps(object):
     n_keypoints = 17
     keypoints = COCO_KEYPOINTS
     include_background = True  # background heatmap
+    include_jitter_offset = True  # jitter offsetmaps
+    fill_jitter_size = 3  # the diameter of the refinement offset area to the nearest keypoint
 
     def __init__(self, input_size, stride):
         assert isinstance(input_size, (int, list)), input_size
@@ -41,9 +43,15 @@ class HeatMaps(object):
 
         # speed dose ont change even if we initialize the HeatMapGenerator in __init__()
         hmps = HeatMapGenerator(self.input_size, self.stride,
+                                self.fill_jitter_size,
                                 self.sigma, self.clip_thre)
 
         heatmaps = hmps.create_heatmaps(anns, meta)
+
+        if self.include_jitter_offset:
+            jittermaps = hmps.create_jitter_offset(anns, meta)
+        else:
+            jittermaps = np.array([], dtype=np.float32)
 
         mask_miss = cv2.resize(mask_miss, (0, 0),
                                fx=self.in_out_scale, fy=self.in_out_scale,
@@ -66,17 +74,20 @@ class HeatMaps(object):
 
         # Pytorch needs N*C*H*W format
         if self.include_background:
+            # add reverse keypoint gaussian heatmap as the background channel
             hmp_reverse = 1 - np.amax(heatmaps, axis=2)
 
             return (
-                torch.from_numpy(heatmaps.transpose((2, 0, 1))),
+                torch.from_numpy(heatmaps),
                 torch.from_numpy(hmp_reverse[None, ...]),
+                torch.from_numpy(jittermaps),
                 torch.from_numpy(mask_miss[None, ...])
             )
         else:
             return (
-                torch.from_numpy(heatmaps.transpose((2, 0, 1))),
+                torch.from_numpy(heatmaps),
                 torch.tensor([]),
+                torch.from_numpy(jittermaps),
                 torch.from_numpy(mask_miss[None, ...])
             )
 
@@ -86,11 +97,12 @@ class HeatMapGenerator(object):
     Generate the keypoint heatmaps and keypoint scale feature map.
     """
 
-    def __init__(self, input_size, stride, sigma, clip_thre):
+    def __init__(self, input_size, stride, fill_jitter_size, sigma, clip_thre):
 
         self.in_w = input_size[0]
         self.in_h = input_size[1]
         self.stride = stride
+        self.fill_jitter_size = fill_jitter_size
         self.sigma = sigma
         self.double_sigma2 = 2 * self.sigma * self.sigma
         # set responses lower than gaussian threshold to 0.
@@ -123,28 +135,26 @@ class HeatMapGenerator(object):
         # generate Gaussian peaks by sampling in the original input resolution space
         self.put_joints(heatmaps, joints, channel_num)
 
-        # add reverse keypoint gaussian heat map on the last background channel
-        # heatmaps[:, :, -1] = 1 - np.amax(heatmaps[:, :, :-1], axis=2)
-
-        return heatmaps
+        return heatmaps.transpose((2, 0, 1))
 
     def put_joints(self, heatmaps, joints, channel_num):
 
         for i in range(channel_num):
+            # loop over each keypoint channel
             # only annotated keypoints are considered !
             visible = joints[:, i, 2] > 0
             self.put_gaussian_peaks(heatmaps, i, joints[visible, i])
 
     def put_gaussian_peaks(self, heatmaps, layer, joints):
         """
-        Generate ground truth on a single channel.
+        Generate ground-truth Gaussian responses on a single channel.
         """
         for i in range(joints.shape[0]):
 
-            x_min = int(round(joints[i, 0] / self.stride) - self.gaussian_size // 2)
-            x_max = int(round(joints[i, 0] / self.stride) + self.gaussian_size // 2)
-            y_min = int(round(joints[i, 1] / self.stride) - self.gaussian_size // 2)
-            y_max = int(round(joints[i, 1] / self.stride) + self.gaussian_size // 2)
+            x_min = int(round(joints[i, 0] / self.stride - self.gaussian_size / 2))
+            x_max = int(round(joints[i, 0] / self.stride + self.gaussian_size / 2))
+            y_min = int(round(joints[i, 1] / self.stride - self.gaussian_size / 2))
+            y_max = int(round(joints[i, 1] / self.stride + self.gaussian_size / 2))
 
             if y_max < 0:
                 continue
@@ -161,8 +171,8 @@ class HeatMapGenerator(object):
             # this slice is not only speed up but crops the keypoints off the image boarder
             # slice can also crop the extended index of a numpy array and return empty array []
             # max_sx + 1: array slice dose not include the last element.
-            slice_x = slice(x_min, x_max + 1)
-            slice_y = slice(y_min, y_max + 1)
+            slice_x = slice(x_min, x_max)  # + 1
+            slice_y = slice(y_min, y_max)
 
             disk_x = self.grid_x[slice_x].astype(np.float32) - joints[i, 0]
             disk_y = self.grid_y[slice_y].astype(np.float32) - joints[i, 1]
@@ -176,11 +186,70 @@ class HeatMapGenerator(object):
             # dis = exp-(math.sqrt((xx - x) * (xx - x) + (yy - y) * (yy - y)) / 2.0 / sigma)
             # dist = np.sqrt((self.X - joints[i, 0])**2 +
             #                (self.Y - joints[i, 1])**2) / 2.0 / self.sigma
-            # np.where(dist > 4.6052, 1e8, dist)
+            # dist = np.where(dist > 4.6052, 1e8, dist)
             # exp = np.exp(-dist)
 
             # overlap Gaussian peaks by taking the maximum
             # Must use slice view to overlap original array!
+            exp[exp < self.gaussian_clip_thre] = 0
             patch = heatmaps[slice_y, slice_x, layer]
             mask = exp > patch
             patch[mask] = exp[mask]
+
+    def create_jitter_offset(self, joints, meta):
+        """
+        Generate ground-truth Jitter offset to the nearest keypoints on the shared two channels
+        """
+        assert meta['joint_num'] == joints.shape[1], 'num of joints mismatch'
+        channel_num = meta['joint_num']
+        offset_vectors = np.full((self.out_h, self.out_w, 2), np.inf, dtype=np.float32)
+
+        for i in range(channel_num):
+            visible = joints[:, i, 2] > 0  # only annotated (visible) keypoints are considered
+            self.put_jitter_maps(offset_vectors, 0, joints[visible, i, 0:2])
+
+        return offset_vectors.transpose((2, 0, 1))
+
+    def put_jitter_maps(self, offset_vectors, layer, joints):  # 设置layer=0就可以保证offset放置在两个channel
+        """
+        Generate Jitter offset (delta_x, delta_y) on the 2*layer, 2*layer+1 channels
+        """
+        for i in range(joints.shape[0]):
+            x_min = int(round(joints[i, 0] / self.stride - self.fill_jitter_size / 2))
+            x_max = int(round(joints[i, 0] / self.stride + self.fill_jitter_size / 2))
+            y_min = int(round(joints[i, 1] / self.stride - self.fill_jitter_size / 2))
+            y_max = int(round(joints[i, 1] / self.stride + self.fill_jitter_size / 2))
+
+            if y_max < 0:
+                continue
+
+            if x_max < 0:
+                continue
+
+            if x_min < 0:
+                x_min = 0
+
+            if y_min < 0:
+                y_min = 0
+
+            slice_x = slice(x_min, x_max)  # + 1
+            slice_y = slice(y_min, y_max)
+
+            # type: np.ndarray # joints[i, 0] -> x
+            offset_x = joints[i, 0] - self.grid_x[slice_x].astype(np.float32)
+            # type: np.ndarray # joints[i, 1] -> y
+            offset_y = joints[i, 1] - self.grid_y[slice_y].astype(np.float32)
+            offset_x_mesh = np.repeat(offset_x.reshape(1, -1), offset_y.shape[0], axis=0)
+            offset_y_mesh = np.repeat(offset_y.reshape(-1, 1), offset_x.shape[0], axis=1)
+            offset_mesh = np.concatenate(
+                (offset_x_mesh[..., None], offset_y_mesh[..., None]),
+                axis=-1)
+            offset_mesh_l = np.linalg.norm(offset_mesh, axis=-1)
+
+            offset_patch = offset_vectors[slice_y, slice_x, 2 * layer: 2 * layer + 2]
+            vector_l = np.linalg.norm(offset_patch, axis=-1)
+
+            mask = offset_mesh_l < vector_l
+
+            # overlap the offset values on the basis of the offset lengths
+            offset_patch[mask] = offset_mesh[mask]

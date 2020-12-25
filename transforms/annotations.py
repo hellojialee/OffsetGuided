@@ -28,7 +28,7 @@ class NormalizeAnnotations(Preprocess):
         for i, ann in enumerate(anns):
             # notice the reshape's mechanism: wrap the every 3 element firstly.
             keypoints[i, :, :3] = np.asarray(ann['keypoints'], dtype=np.float32).reshape(-1, 3)
-            keypoints[i, :, 3] = math.sqrt(ann['area']
+            keypoints[i, :, 3] = math.sqrt(ann['area']  # fixme: change to the root of bbox?
                                            ) * np.array(COCO_PERSON_SIGMAS)
         # print('ground truth \n', keypoints)
 

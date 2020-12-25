@@ -72,7 +72,7 @@ def _scale(image, anns, meta, mask_miss, target_w, target_h, mode):
     return image, anns, meta, mask_miss
 
 
-class RescaleAbsolute(Preprocess):
+class RescaleLongAbsolute(Preprocess):
     # 根据给出的具体尺寸进行缩放，用于测试时调整图像尺寸，根据最长的变成确定缩放系数
     def __init__(self, long_edge, *, resample=cv2.INTER_CUBIC):
         self.long_edge = long_edge

@@ -118,7 +118,7 @@ class LossChoice(object):
 
 class HeatMapsLoss(object):
 
-    def __init__(self, head_name, n_stacks, stack_weights, hmp_loss):
+    def __init__(self, head_name, n_stacks, stack_weights, hmp_loss, jomp_loss):
         super(HeatMapsLoss, self).__init__()
 
         self.head_name = head_name + '_loss'
@@ -126,11 +126,12 @@ class HeatMapsLoss(object):
         assert len(stack_weights) >= n_stacks, type(stack_weights)
         self.stack_weights = [weight / sum(stack_weights) for weight in stack_weights]
         self.hmp_loss = hmp_loss
+        self.jomp_loss = jomp_loss
 
         LOG.debug('%s loss config: n_stacks = %d, stack_weights = %s, loss = %s ',
                   head_name, n_stacks, stack_weights, self.hmp_loss.__name__)
 
-    def __call__(self, pred_hpms, gt_hpm, gt_bghmp, mask_miss):
+    def __call__(self, pred_hpms, gt_hpm, gt_bghmp, gt_jomp, mask_miss):
         """
         Args:
             pred_hpms: inferred outputs like [hmp_stack1, hmp_stack2], [bg_hmp_stack1, bg_hmp_stack2]
@@ -143,22 +144,31 @@ class HeatMapsLoss(object):
         assert len(pred_hpms[0]) == self.n_stacks, 'BaseNet mismatches HeadNet'
         batch_size = gt_hpm.shape[0]
         LOG.debug('batch size = %d', batch_size)
-        hmps, bg_hmps = pred_hpms
-        out1, out2 = [], []
+        hmps, bg_hmps, jomps = pred_hpms
+        out1, out2, out3 = [], [], []
 
-        for stack_i, (hmp, bg_hmp) in enumerate(zip(hmps, bg_hmps)):  # loop each stack
+        for stack_i, (hmp, bg_hmp, jomp) in enumerate(zip(hmps, bg_hmps, jomps)):  # loop each stack
             inter1 = self.hmp_loss(hmp, gt_hpm, mask_miss)  # type: torch.Tensor
-            weighted_loss = torch.mul(inter1.sum(), self.stack_weights[stack_i])
-            out1.append(weighted_loss)
+            weighted_hmploss = torch.mul(inter1.sum(), self.stack_weights[stack_i])
+            out1.append(weighted_hmploss)
 
             if len(bg_hmp) > 0:  # background heatmap loss
                 inter2 = self.hmp_loss(bg_hmp, gt_bghmp, mask_miss)  # type: torch.Tensor
                 weighted_bgloss = torch.mul(inter2.sum(), self.stack_weights[stack_i])
                 out2.append(weighted_bgloss)
-        LOG.debug('hmp loss at each stack: %s, \t background hmp loss at eack stack: %s',
+
+            if len(jomp) > 0:  # jitter offset loss  # todo: add laplace spread and sqrt_re?
+                inter3 = self.jomp_loss(jomp, gt_jomp, None, mask_miss)  # type: torch.Tensor
+                weighted_offloss = torch.mul(inter3.sum(), self.stack_weights[stack_i])
+                out3.append(weighted_offloss)
+        LOG.debug('hmp loss at each stack: %s, \t background hmp loss at eack stack: %s'
+                  ', \t jitter offset loss at eack stack: %s',
                   torch.tensor(out1).cpu().numpy().tolist(),
-                  torch.tensor(out2).cpu().numpy().tolist())
-        return sum(out1) / batch_size, sum(out2) / batch_size  # hmp_loss, bg_hmp_loss
+                  torch.tensor(out2).cpu().numpy().tolist(),
+                  torch.tensor(out3).cpu().numpy().tolist(),
+                  )
+        # hmp_loss, bg_hmp_loss, jitter_off_loss
+        return sum(out1) / batch_size, sum(out2) / batch_size, sum(out3) / batch_size
 
 
 class OffsetMapsLoss(object):
@@ -207,7 +217,7 @@ class OffsetMapsLoss(object):
 
 
 def lossfuncs_factory(headnames, n_stacks, stack_weights,
-                      heatmap_loss, offset_loss, scale_loss, sqrt_re):
+                      heatmap_loss, jitter_offset_loss, offset_loss, scale_loss, sqrt_re):
     """Build loss networks.
 
     Args:
@@ -216,18 +226,19 @@ def lossfuncs_factory(headnames, n_stacks, stack_weights,
         stack_weights (list): weights for different stacks.
     """
     hmp_loss = getattr(LossChoice, heatmap_loss)
+    jomp_loss = getattr(LossChoice, jitter_offset_loss)
 
     off_loss = getattr(LossChoice, offset_loss)
     s_loss = getattr(LossChoice, scale_loss)
     LOG.debug('tau = %.4f, gamma = %d, margin = %.4f', TAU, GAMMA, MARGIN)
 
-    lossnets = [factory_loss(h, n_stacks, stack_weights, hmp_loss, off_loss, s_loss, sqrt_re)
+    lossnets = [factory_loss(h, n_stacks, stack_weights, hmp_loss, jomp_loss, off_loss, s_loss, sqrt_re)
                 for h in headnames]
 
     return lossnets
 
 
-def factory_loss(head_name, n_stacks, stack_weights, hmp_loss, off_loss, s_loss, sqrt_re):
+def factory_loss(head_name, n_stacks, stack_weights, hmp_loss, jomp_loss, off_loss, s_loss, sqrt_re):
     """
     Build a head network.
 
@@ -238,8 +249,8 @@ def factory_loss(head_name, n_stacks, stack_weights, hmp_loss, off_loss, s_loss,
                      'heatmap',
                      'heatmaps') or \
             re.match('hmp[s]?([0-9]+)$', head_name) is not None:
-        LOG.info('select %s for %s_head_net', hmp_loss.__name__, head_name)
-        return HeatMapsLoss(head_name, n_stacks, stack_weights, hmp_loss)
+        LOG.info('select %s and %s for %s_head_net', hmp_loss.__name__, jomp_loss.__name__, head_name)
+        return HeatMapsLoss(head_name, n_stacks, stack_weights, hmp_loss, jomp_loss)
 
     if head_name in ('omp',
                      'omps'

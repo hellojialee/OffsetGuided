@@ -42,7 +42,9 @@ class GreedyGroup(object):
         This is not a batch-input operation!
 
         Args:
-            limbs (np.ndarray): (L, K, 10), includes all limbs from the same image.
+            limbs (np.ndarray): (L, K, 13), includes all limbs from the same image. The last dim includes:
+              [x1, y1, v1, x2, y2, v2, ind1, ind2, len_delta (min_dist), len_limb, limb_score, scale1, scale2]
+              0,    1, 2,  3,  4,  5,    6,   7,          8,                9,         10,        11,    12
 
         Returns:
             subset of keypoints (np.ndarray): shape [M * [ 17 * [x, y, v, s, limb_score, ind]]]
@@ -59,7 +61,7 @@ class GreedyGroup(object):
         for i, ((jtype_f, jtype_t), conns) in enumerate(zip(self.skeleton, limbs)):
             LOG.debug('limbs from jtype_f %d --> jtype_t %d', jtype_f, jtype_t)
 
-            if self.use_scale:  # conns: (K, 12)   #  np.minimum((self.dist_max, conns[:, 12]) is bad
+            if self.use_scale:  # conns: (K, 13)   #  np.minimum((self.dist_max, conns[:, 12]) is bad
                 dist_valid = conns[:, 8] < np.maximum(self.dist_max, conns[:, 12])  # 12: joint_t scale
             else:  # conns: (K, 10)
                 dist_valid = conns[:, 8] < self.dist_max
@@ -243,7 +245,7 @@ class GreedyGroup(object):
         return row_cache
 
 
-def soft_nms(subset, suppressed_v=2):
+def soft_nms(subset, suppressed_v=0):
     if not len(subset):
         return subset
 
@@ -266,7 +268,7 @@ def soft_nms(subset, suppressed_v=2):
             x = np.clip(xyv[0], 0.0, occ.shape[1] - 1).astype(int)
             y = np.clip(xyv[1], 0.0, occ.shape[0] - 1).astype(int)
             if occ[y, x]:
-                xyv[2] /= suppressed_v
+                xyv[2] = suppressed_v
             else:
                 scalar_square_add_single(occ, xyv[0], xyv[1], joint_s, 1)
     return subset

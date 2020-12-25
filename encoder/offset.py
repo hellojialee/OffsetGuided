@@ -55,13 +55,13 @@ class OffsetMaps(object):
         # Pytorch needs N*C*H*W format
         if self.include_scale:
             return (
-                torch.from_numpy(offset_maps.transpose((2, 0, 1))),
-                torch.from_numpy(scale_maps.transpose((2, 0, 1))),
+                torch.from_numpy(offset_maps),
+                torch.from_numpy(scale_maps),
                 torch.from_numpy(mask_miss[None, ...])
             )
         else:
             return (
-                torch.from_numpy(offset_maps.transpose((2, 0, 1))),
+                torch.from_numpy(offset_maps),
                 torch.tensor([]),
                 torch.from_numpy(mask_miss[None, ...]),
             )
@@ -108,7 +108,7 @@ class OffsetMapGenerator(object):
         # generate offset by sampling floating point positions in the original input resolution space
         self.put_connections(feature_maps, joints)
 
-        return offset_maps, scale_maps
+        return offset_maps.transpose((2, 0, 1)), scale_maps.transpose((2, 0, 1))
 
     def put_connections(self, feature_maps, joints):
 
@@ -147,10 +147,10 @@ class OffsetMapGenerator(object):
 
         for joint1, joint2 in zip(joints_fr, joints_to):
 
-            x_min = int(round(joint1[0] / self.stride) - self.fill_scale_size // 2)
-            x_max = int(round(joint1[0] / self.stride) + self.fill_scale_size // 2)
-            y_min = int(round(joint1[1] / self.stride) - self.fill_scale_size // 2)
-            y_max = int(round(joint1[1] / self.stride) + self.fill_scale_size // 2)
+            x_min = int(round(joint1[0] / self.stride - self.fill_scale_size / 2))
+            x_max = int(round(joint1[0] / self.stride + self.fill_scale_size / 2))
+            y_min = int(round(joint1[1] / self.stride - self.fill_scale_size / 2))
+            y_max = int(round(joint1[1] / self.stride + self.fill_scale_size / 2))
 
             if y_max < 0:
                 continue
@@ -167,8 +167,8 @@ class OffsetMapGenerator(object):
             # this slice is not only to speed up (only compute the labels in needed areas,
             # but crop keypoints off the image boarder.
             # slice crops the extended index of a numpy array and return empty array []
-            slice_x = slice(x_min, x_max + 1)
-            slice_y = slice(y_min, y_max + 1)
+            slice_x = slice(x_min, x_max)  # + 1
+            slice_y = slice(y_min, y_max)  # + 1
 
             offset_x = (joint2[0] - self.grid_x[slice_x].astype(np.float32))  # type: np.ndarray
             # joint2[i, 1] -> y

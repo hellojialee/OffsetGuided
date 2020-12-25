@@ -19,11 +19,15 @@ def encoder_cli(parser):
                        help='Gaussian distribution below this value is cut to zero')
     group.add_argument('--sigma', default=HeatMaps.sigma,
                        type=int, help='standard deviation of Gaussian distribution')
+    group.add_argument('--fill-jitter-size', default=HeatMaps.fill_jitter_size,
+                       type=int,
+                       help='the area to the nearest keypoint are fille with '
+                            'the jitter refinement offset')
 
     group = parser.add_argument_group('offsetmap and scalemap encoder')
     group.add_argument('--fill-scale-size', default=OffsetMaps.fill_scale_size,
                        type=int,
-                       help='the area around the keypoint will be filled with '
+                       help='the area around the keypoint are filled with '
                             'joint scale values and offset.')
     group.add_argument('--min_scale', default=OffsetMaps.min_scale,
                        type=float, help='set minimum keypoint scale')
@@ -39,6 +43,8 @@ def encoder_factory(args, strides=None):
     HeatMaps.clip_thre = args.gaussian_clip_thre
     HeatMaps.sigma = args.sigma
     HeatMaps.include_background = args.include_background  # defined in head.py
+    HeatMaps.include_jitter_offset = args.include_jitter_offset
+    HeatMaps.fill_jitter_size = args.fill_jitter_size
 
     # configure scalemap
     OffsetMaps.fill_scale_size = args.fill_scale_size

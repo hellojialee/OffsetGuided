@@ -34,8 +34,9 @@ class LimbsCollect(object):
         thre_hmp (float): candidate kepoints below this value are moved outside the image boarder
     """
 
-    def __init__(self, hmp_s, off_s, *, topk=40, thre_hmp=0.08,
-                 min_len=3, include_scale=False, keypoints=COCO_KEYPOINTS, skeleton=COCO_PERSON_SKELETON):
+    def __init__(self, hmp_s, off_s, *, topk=40, thre_hmp=0.08, min_len=3,
+                 include_jitter_offset=False, include_scale=False, use_jitter=True,
+                 keypoints=COCO_KEYPOINTS, skeleton=COCO_PERSON_SKELETON):
         LOG.info('number of skeleton limbs: %d, '  # separate the long string without comma
                  'response threshold to drop keypoints: threshold=%.4f',
                  len(skeleton), thre_hmp)
@@ -51,14 +52,18 @@ class LimbsCollect(object):
         self.K = topk
         self.thre_hmp = thre_hmp
         self.min_len = min_len
+        self.include_jitter_offset = include_jitter_offset
+        LOG.info('inferred keypoint jitter offsets are available: %s', include_jitter_offset)
         self.include_scale = include_scale
         LOG.info('inferred kepoint scales are available: %s', include_scale)
+        self.use_jitter = use_jitter
         self.jtypes_f, self.jtypes_t = self.pack_jtypes(skeleton)
 
     def generate_limbs(self,
                        hmps_hr: torch.Tensor,
+                       jomps_hr: torch.Tensor,
                        offs_hr: torch.Tensor,
-                       scmps,
+                       scmps_hr,
                        vector_nd=2) -> torch.Tensor:
         """
         Generate all candidate limbs between adjacent keypoints in the human skeleton tree,
@@ -66,8 +71,9 @@ class LimbsCollect(object):
 
         Args:
             hmps_hr (Tensor): with shape (N, C, H, W)
+            jomps_hr (Tensor): jitter offset to nearest keypoints with shape (N, 2, H, W)
             offs_hr (Tensor): with shape (N, L*2, H, W)
-            scmps (Tensor): (N, C, H, W), feature map of inferred keypoint scales.
+            scmps_hr (Tensor): (N, C, H, W), feature map of inferred keypoint scales.
             vector_nd (int): dimension number of each offset vector
 
         Returns: a Tensor containing all candidate limbs information in a batch images (batch=N here)
@@ -102,11 +108,11 @@ class LimbsCollect(object):
         # ########################################################################
         # ############### get keypoint scales for all limb endpoints ############
         # ########################################################################
-        if self.include_scale and isinstance(scmps, torch.Tensor):  # if scmps != []
+        if self.include_scale and isinstance(scmps_hr, torch.Tensor):  # if scmps != []
             kps_scales_f = self._channel_scales(
-                scmps, kps_inds_f, n, n_limbs, self.jtypes_f)  # # (N, L, K, 1)
+                scmps_hr, kps_inds_f, n, n_limbs, self.jtypes_f)  # # (N, L, K, 1)
             kps_scales_t = self._channel_scales(
-                scmps, kps_inds_t, n, n_limbs, self.jtypes_t)  # (N, L, K, 1)
+                scmps_hr, kps_inds_t, n, n_limbs, self.jtypes_t)  # (N, L, K, 1)
         else:
             kps_scales_f = 4 * torch.ones_like(kps_scores_f,   # (N, L, K, 1)
                                                dtype=kps_scores_f.dtype,
@@ -116,19 +122,35 @@ class LimbsCollect(object):
                                                device=kps_scores_t.device)
 
         # ########################################################################
+        # ############### get jitter offset for all limb endpoints ############
+        # ########################################################################
+        if self.include_jitter_offset and isinstance(jomps_hr, torch.Tensor):  # if scmps != []
+            kps_jitter_f = self._channel_jitters(
+                jomps_hr, kps_inds_f, n, n_limbs, self.jtypes_f)  # # (N, L, K, 2)
+            kps_jitter_t = self._channel_jitters(
+                jomps_hr, kps_inds_t, n, n_limbs, self.jtypes_t)  # (N, L, K, 2)
+        else:
+            kps_jitter_f = torch.zeros(n, n_limbs, self.K, 2,   # (N, L, K, 2)
+                                               dtype=kps_xys_f.dtype,
+                                               device=kps_xys_f.device)
+            kps_jitter_t = torch.zeros(n, n_limbs, self.K, 2,  # (N, L, K, 2)
+                                               dtype=kps_xys_t.dtype,
+                                               device=kps_xys_t.device)
+
+        # ########################################################################
         # ############### get offset vectors of all limb connections ############
         # ########################################################################
         offs_reshape = offs_hr.view((n, -1, vector_nd, h, w))  # (N, L, 2, H, W)
         flat_off = offs_reshape.view((n, n_limbs, vector_nd, -1))  # stretch and flat to (N, L, 2, H*W)
         kps_inds_f_expand = kps_inds_f.permute((0, 1, 3, 2)).expand(-1, -1, vector_nd, -1)  # (N, L, 2, K)
-        # (N, L, 2, K) -> (N, L, K, 2)
+        # (N, L, 2, H*W) -> (N, L, 2, K) -> (N, L, K, 2)
         kps_off_f = flat_off.gather(-1, kps_inds_f_expand).permute((0, 1, 3, 2))
 
         # ########################################################################
         # ############### get the regressed end-joints from the start-joints #########
         # ########################################################################
         kps_guid_t = kps_xys_f.repeat(1, 1, 1, vector_nd//2) + kps_off_f * self.resize_factor  # (N, L, K, 2)
-
+        # TODO: 如果想通过jitter refine offset，那么必须根据kps_guid_t指向的坐标位置，重新取出对应位置的jitter！
         # ########################################################################
         # ############### find limbs from kps_f_lk to kps_t_lm ###############
         # ########################################################################
@@ -165,19 +187,29 @@ class LimbsCollect(object):
         # ########################################################################
         # ################# length and scores of each candidate limbs ############
         # ########################################################################
-        len_limbs = torch.clamp((kps_xys_f.float() - matched_kps_xys_t.float()
+        len_limbs = torch.clamp((kps_xys_f - matched_kps_xys_t
                                  ).norm(dim=-1, keepdim=True), min=self.min_len)  # (N, L, K, 1)
         # Is torch.exp(-min_dist / kps_scales_t) more sensible? --No, this leads 0.5 AP drop
         limb_scores = kps_scores_f * matched_kps_score_t * torch.exp(-min_dist / len_limbs)
         # len_limb may be 0, t = min_dist / (len_limbs + 1e-4)
+
+        # ########################################################################
+        # ################# jitter refinement ############
+        # ########################################################################
+        matched_kps_jitter_t = kps_jitter_t.gather(2, min_ind.expand(
+            n, n_limbs, self.K, 2))  # (N, L, K, 2)
+        if self.use_jitter:
+            kps_xys_f += kps_jitter_f
+            matched_kps_xys_t += matched_kps_jitter_t
+
         # limbs' shape=(N, L, K, 13), in which the last dim includes:
         # [x1, y1, v1, x2, y2, v2, ind1, ind2, len_delta (min_dist), len_limb, limb_score, scale1, scale2]
         # 0,    1, 2,  3,  4,  5,    6,   7,          8,                9,         10,        11,    12
-        limbs = torch.cat((kps_xys_f.float(),
+        limbs = torch.cat((kps_xys_f,
                            kps_scores_f,
-                           matched_kps_xys_t.float(),
+                           matched_kps_xys_t,
                            matched_kps_score_t,
-                           kps_inds_f.float(),
+                           kps_inds_f.float(),  # for dtype compatibility
                            matched_kps_inds_t.float(),
                            min_dist,
                            len_limbs,
@@ -204,7 +236,7 @@ class LimbsCollect(object):
         kps_xys = torch.cat((kps_xs, kps_ys), dim=-1)
         # ######## set candidate keypoints with low responses off the image #######
         kps_xys[kps_scores.expand_as(kps_xys) < thresh] -= 100000
-        return kps_inds, kps_scores, kps_xys
+        return kps_inds, kps_scores.float(), kps_xys.float()
 
     @staticmethod
     def _channel_scales(scsmp, kps_inds, n, n_limbs, jtypes):
@@ -213,3 +245,13 @@ class LimbsCollect(object):
         flat_scsmp = scsmp_channels.view((n, n_limbs, -1)).unsqueeze(-1)  # (N, L, H*W, 1)
         kps_scale = flat_scsmp.gather(-2, kps_inds)  # (N, L, K, 1), gathered by kps_inds
         return kps_scale
+
+    @staticmethod
+    def _channel_jitters(jomps, kps_inds, n, n_limbs, jtypes):
+        # shape of jomps: (N, 2, H, W)
+        # shape of kps_inds: (N, L, K, 1)
+        assert n_limbs == len(jtypes), 'defined limbs number mismatches'
+        jomps_channels = jomps.unsqueeze(1).expand(-1, n_limbs, -1, -1, -1)  # (N, 1, 2, H, W) --> (N, L, 2, H, W)
+        flat_jomps = jomps_channels.view((n, n_limbs, 2, -1)).permute((0, 1, 3, 2))  # (N, L, 2,  H*W) --> (N, L, H*W, 2)
+        kps_jitter = flat_jomps.gather(-2, kps_inds.expand(-1, -1, -1, 2))  # (N, L, K, 2), gathered by kps_inds
+        return kps_jitter

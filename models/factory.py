@@ -41,15 +41,17 @@ def net_cli(parser):
                             'of Laplace distribution, you should set it to '
                             'True if you want to use laplace loss')
     group.add_argument('--include-background', default=False, action='store_true',
-                       help='include the heatmap of background channel')
+                       help='add conve layers to regress the heatmap of background channel')
+    group.add_argument('--include-jitter-offset', default=False, action='store_true',
+                       help='add conve layers to regress the jitter refinement offset to the nearest keypoint')
     group.add_argument('--include-scale', default=False, action='store_true',
-                       help='add cone layers to regress the keypoint scales '
+                       help='add conve layers to regress the keypoint scales '
                             'in separate channels')
 
     group = parser.add_argument_group('loss configuration')
-    group.add_argument('--lambdas', default=[1, 1, 0.01, 0.01],
+    group.add_argument('--lambdas', default=[1, 1, 0.1, 0.01, 0.01],
                        type=float, nargs='+',
-                       help='learning task scaling factors for hmp_loss, bg_hmp_loss, '
+                       help='learning task scaling factors for hmp_loss, bg_hmp_loss, jitter_off_loss, '
                             'offset_loss and scale_loss, directly multiplied, not averaged')
     group.add_argument('--stack-weights', default=[1, 1],
                        type=float, nargs='+',
@@ -57,6 +59,9 @@ def net_cli(parser):
     group.add_argument('--hmp-loss', default='focal_l2_loss',
                        choices=['l2_loss', 'focal_l2_loss'],
                        help='loss for heatmap regression')
+    group.add_argument('--jitter-offset-loss', default='offset_l1_loss',
+                       choices=['offset_l1_loss', 'offset_laplace_loss'],
+                       help='loss for jitter offeset regression')
     group.add_argument('--offset-loss', default='offset_l1_loss',
                        choices=['offset_l1_loss', 'offset_laplace_loss'],
                        help='loss for offeset regression')
@@ -95,6 +100,7 @@ def model_factory(args):
             feature_dim,
             args.include_spread,
             args.include_background,
+            args.include_jitter_offset,
             args.include_scale)
         # no pre-trained headnets, so we randomly initialize them
         if args.initialize_whole:
@@ -105,6 +111,7 @@ def model_factory(args):
             n_stacks,
             args.stack_weights,
             args.hmp_loss,
+            args.jitter_offset_loss,
             args.offset_loss,
             args.scale_loss,
             args.sqrt_re)
