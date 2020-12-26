@@ -99,10 +99,12 @@ def run_images():
         transforms.RescaleLongAbsolute(args.long_edge),
         transforms.CenterPad(args.long_edge),
         # transforms.RightDownPad(args.long_edge)  # CenterPad leads to higher metrics
-        # transforms.WarpAffineTransforms(args.square_length, crop_roi=False,
-        #                                 aug_params=transforms.FixedAugParams()),
-
     ]
+    # ##### WarpAffineTransforms #######
+    # preprocess_transformations = [
+    #     transforms.NormalizeAnnotations(),
+    #     transforms.WarpAffineTransforms(args.square_length, crop_roi=False,
+    #                                     aug_params=transforms.FixedAugParams()), ]
 
     preprocess_transformations += [
         transforms.ImageTransform(torchvision.transforms.ToTensor()),
@@ -213,7 +215,7 @@ def validation(dump_name, dataset='val2017'):
     # #############################################################################
     # For evaluation on test-dev set
     elif dataset == 'test2017':
-        annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
+        annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json'  # image_info_test2017.json
     else:
         raise Exception('unknown dataset')
 

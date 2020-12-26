@@ -40,11 +40,13 @@ def tensor_loss(pred, gt, mask_miss, fun):
     Args:
         pred: tensor shape (N, C, out_h, out_w)
         gt: tensor shape (N, C, out_h, out_w)
-        mask_miss: tensor shape (N, 1, out_h, out_w)"""
-    # # Notice! expand does not allocate more memory but just
-    #     make the tensor look as if you expanded it. You should call
-    #     .clone() or repeat on the resulting tensor if you plan on modifying it
-    # https://discuss.pytorch.org/t/very-strange-behavior-change-one-element-of-a-tensor-will-influence-all-elements/41190
+        mask_miss: tensor shape (N, 1, out_h, out_w)
+
+    Note: expand does not allocate more memory but just
+        make the tensor look as if you expanded it. You should call
+        .clone() or repeat on the resulting tensor if you plan on modifying it
+        https://discuss.pytorch.org/t/very-strange-behavior-change-one-element-of-a-tensor-will-influence-all-elements/41190
+        """
     mask_miss = mask_miss.expand_as(gt)
     labelled_pred = pred[mask_miss]
     labelled_gt = gt[mask_miss]
@@ -71,7 +73,6 @@ class LossChoice(object):
             pred: inferred tensor of shape (N, C, out_h, out_w)
             gt: groudtruth tensor of shape (N, C, out_h, out_w)
             mask_miss: tensor of shape (N, 1, out_h, out_w) unlabelled areas denoted as 0,
-            fun: function to compute the loss.
         """
         return tensor_loss(pred, gt, mask_miss, l1)
 

@@ -93,10 +93,10 @@ def data_cli(parser):
     group.add_argument('--max-scale', default=2.0, type=float,  # 1.5
                        help='upper bound of the relative'
                             ' image scale during augmentation')
-    group.add_argument('--min-stretch', default=0.8, type=float,
+    group.add_argument('--min-stretch', default=0.95, type=float,
                        help='lower bound of the relative'  # leads to less than 0.3% AP
                             ' image length stretch during augmentation')
-    group.add_argument('--max-stretch', default=1.2, type=float,
+    group.add_argument('--max-stretch', default=1.05, type=float,
                        help='upper bound of the relative'
                             ' image length stretch during augmentation')
     # bigger shift can produce cropped persons
@@ -220,7 +220,7 @@ if __name__ == '__main__':  # for debug
                 plt.show()
 
                 plt.imshow(image)  # We have manually set Opencv earlier: RGB
-                plt.imshow(show_labels[:, :, 14], alpha=0.5)  # mask_all
+                plt.imshow(show_labels[:, :, 11], alpha=0.5)  # mask_all
                 plt.show()
 
                 plt.imshow(image)  # We have manually set Opencv earlier: RGB

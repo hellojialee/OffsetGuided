@@ -22,7 +22,7 @@ class Preprocess(metaclass=ABCMeta):
             original_joints.transpose([0, 2, 1])).transpose([0, 2, 1])
         keypoints[:, :, 0:2] = affine_joints
         # channel indexing.
-        keypoints[:, meta['joint_channel_ind'], :] = keypoints
+        keypoints = keypoints[:, meta['joint_channel_ind'], :]
         return keypoints
 
     @staticmethod
