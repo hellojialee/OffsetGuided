@@ -41,9 +41,9 @@ def tensor_loss(pred, gt, mask_miss, fun):
         pred: tensor shape (N, C, out_h, out_w)
         gt: tensor shape (N, C, out_h, out_w)
         mask_miss: tensor shape (N, 1, out_h, out_w)"""
-    # # Notice! expand does not allocate more memory but just m
-    # ake the tensor look as if you expanded it. You should call
-    # .clone() or repeat on the resulting tensor if you plan on modifying it
+    # # Notice! expand does not allocate more memory but just
+    #     make the tensor look as if you expanded it. You should call
+    #     .clone() or repeat on the resulting tensor if you plan on modifying it
     # https://discuss.pytorch.org/t/very-strange-behavior-change-one-element-of-a-tensor-will-influence-all-elements/41190
     mask_miss = mask_miss.expand_as(gt)
     labelled_pred = pred[mask_miss]
@@ -118,7 +118,7 @@ class LossChoice(object):
 
 class HeatMapsLoss(object):
 
-    def __init__(self, head_name, n_stacks, stack_weights, hmp_loss, jomp_loss):
+    def __init__(self, head_name, n_stacks, stack_weights, hmp_loss, jomp_loss, sqrt_re=False):
         super(HeatMapsLoss, self).__init__()
 
         self.head_name = head_name + '_loss'
@@ -127,6 +127,7 @@ class HeatMapsLoss(object):
         self.stack_weights = [weight / sum(stack_weights) for weight in stack_weights]
         self.hmp_loss = hmp_loss
         self.jomp_loss = jomp_loss
+        self.sqrt_re = sqrt_re  # resize the offset loss by
 
         LOG.debug('%s loss config: n_stacks = %d, stack_weights = %s, loss = %s ',
                   head_name, n_stacks, stack_weights, self.hmp_loss.__name__)
@@ -154,6 +155,8 @@ class HeatMapsLoss(object):
 
             if len(bg_hmp) > 0:  # background heatmap loss
                 inter2 = self.hmp_loss(bg_hmp, gt_bghmp, mask_miss)  # type: torch.Tensor
+                if self.sqrt_re:
+                    inter2 = torch.sqrt(inter2 + 1e-4)
                 weighted_bgloss = torch.mul(inter2.sum(), self.stack_weights[stack_i])
                 out2.append(weighted_bgloss)
 
@@ -250,7 +253,7 @@ def factory_loss(head_name, n_stacks, stack_weights, hmp_loss, jomp_loss, off_lo
                      'heatmaps') or \
             re.match('hmp[s]?([0-9]+)$', head_name) is not None:
         LOG.info('select %s and %s for %s_head_net', hmp_loss.__name__, jomp_loss.__name__, head_name)
-        return HeatMapsLoss(head_name, n_stacks, stack_weights, hmp_loss, jomp_loss)
+        return HeatMapsLoss(head_name, n_stacks, stack_weights, hmp_loss, jomp_loss, sqrt_re)
 
     if head_name in ('omp',
                      'omps'

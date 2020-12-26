@@ -220,7 +220,7 @@ if __name__ == '__main__':  # for debug
                 plt.show()
 
                 plt.imshow(image)  # We have manually set Opencv earlier: RGB
-                plt.imshow(show_labels[:, :, 1], alpha=0.5)  # mask_all
+                plt.imshow(show_labels[:, :, 14], alpha=0.5)  # mask_all
                 plt.show()
 
                 plt.imshow(image)  # We have manually set Opencv earlier: RGB

@@ -470,7 +470,7 @@ def default_output_file(args):
     out = 'logs/outputs/{}-{}'.format(args.basenet, '-'.join(args.headnets))
     if args.square_length != 512:
         out += '-edge{}'.format(args.square_length)
-    now = datetime.datetime.now().strftime('%y%m%d-%H%M%S')
+    now = datetime.datetime.now().strftime('%Y-%m%d-%H%M%S')
     out += '-{}.pkl'.format(now)
 
     return out

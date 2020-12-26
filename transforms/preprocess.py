@@ -10,7 +10,7 @@ class Preprocess(metaclass=ABCMeta):
         """Implementation of preprocess operation."""
 
     @staticmethod
-    def affine_keypoint_inverse(keypoints, meta):  # has been checked, it's OK
+    def affine_keypoint_inverse(keypoints, meta):  # has been checked, it's OK but wrong when flipping
         """Inverse transform for WarpAffine augmentation in a single image"""
         keypoints = keypoints.copy()
         M = np.linalg.inv(meta['affine3×3mat'])

@@ -18,7 +18,7 @@ class OffsetMaps(object):
         include_scale (bool): generate keypoint scale maps or not.
     """
     fill_scale_size = 7  # 10 the diameter of the filled area
-    # around keypoints will be filled with joint scale
+    # around keypoints will be filled with joint scale and adjacent-joint offset
     min_scale = 0.1  # minimum keypoint scale
     skeleton = COCO_PERSON_SKELETON  # human skeleton connections
     include_scale = True

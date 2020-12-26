@@ -134,7 +134,7 @@ def run_images():
         # ############# inverse the keypoint into the original image space ############
         # #########################################################################
         for index, (image_poses, image_meta) in enumerate(zip(batch_poses, metas)):
-            # change to affine_keypoint_inverse or annotation_inverse
+            # you can change to affine_keypoint_inverse or annotation_inverse
             subset = preprocess.annotations_inverse(image_poses, image_meta)
             batch_poses[index] = subset
 

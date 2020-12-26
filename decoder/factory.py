@@ -178,7 +178,7 @@ def decoder_cli(parser):
                        help='only effective when we set --include-scale in the network'
                             'use the inferred keypoint scales as the criterion '
                             'to keep limbs (keypoint pairs)')
-    group.add_argument('--use-jitter', default=True, type=boolean_string,
+    group.add_argument('--use-jitter-offset', default=True, type=boolean_string,
                        help='only effective when we set --include-jitter-offset in the network'
                             'use the inferred jitter offset to refine the precision drop of keypoint localization')
 
@@ -238,7 +238,7 @@ def decoder_factory(args):
                                         min_len=args.min_len,
                                         include_jitter_offset=args.include_jitter_offset,
                                         include_scale=args.include_scale,
-                                        use_jitter=args.use_jitter,
+                                        use_jitter_offset=args.use_jitter_offset,
                                         keypoints=temp_dic['keypoints'],
                                         skeleton=temp_dic['skeleton'])
 

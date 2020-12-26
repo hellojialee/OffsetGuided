@@ -35,7 +35,7 @@ class LimbsCollect(object):
     """
 
     def __init__(self, hmp_s, off_s, *, topk=40, thre_hmp=0.08, min_len=3,
-                 include_jitter_offset=False, include_scale=False, use_jitter=True,
+                 include_jitter_offset=False, include_scale=False, use_jitter_offset=True,
                  keypoints=COCO_KEYPOINTS, skeleton=COCO_PERSON_SKELETON):
         LOG.info('number of skeleton limbs: %d, '  # separate the long string without comma
                  'response threshold to drop keypoints: threshold=%.4f',
@@ -56,7 +56,7 @@ class LimbsCollect(object):
         LOG.info('inferred keypoint jitter offsets are available: %s', include_jitter_offset)
         self.include_scale = include_scale
         LOG.info('inferred kepoint scales are available: %s', include_scale)
-        self.use_jitter = use_jitter
+        self.use_jitter_offset = use_jitter_offset
         self.jtypes_f, self.jtypes_t = self.pack_jtypes(skeleton)
 
     def generate_limbs(self,
@@ -194,11 +194,11 @@ class LimbsCollect(object):
         # len_limb may be 0, t = min_dist / (len_limbs + 1e-4)
 
         # ########################################################################
-        # ################# jitter refinement ############
+        # ######################## jitter refinement #############################
         # ########################################################################
         matched_kps_jitter_t = kps_jitter_t.gather(2, min_ind.expand(
             n, n_limbs, self.K, 2))  # (N, L, K, 2)
-        if self.use_jitter:
+        if self.use_jitter_offset:
             kps_xys_f += kps_jitter_f
             matched_kps_xys_t += matched_kps_jitter_t
 

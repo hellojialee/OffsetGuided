@@ -48,8 +48,8 @@ class HeatMapsHead(torch.nn.Module):
     def forward(self, args):
         assert len(args) == self.n_stacks, 'multiple outputs from BaseNet'
         out_hmps = []
-        out_bghmp = []
-        out_jitteroffs = []
+        out_bghmps = []
+        out_jomps = []
 
         for hmp_layer, bg_layer, jo_layer, x in zip(self.hp_convs, self.bghp_convs, self.jitter_convs, args):
             hmp = hmp_layer(x)
@@ -57,17 +57,17 @@ class HeatMapsHead(torch.nn.Module):
 
             if self.include_background:
                 bg_hmp = bg_layer(x)
-                out_bghmp.append(bg_hmp)
+                out_bghmps.append(bg_hmp)
             else:
-                out_bghmp.append([])
+                out_bghmps.append([])
 
             if self.include_jitter_offset:
                 jitter_off = jo_layer(x)
-                out_jitteroffs.append(jitter_off)
+                out_jomps.append(jitter_off)
             else:
-                out_jitteroffs.append([])
+                out_jomps.append([])
 
-        return out_hmps, out_bghmp, out_jitteroffs
+        return out_hmps, out_bghmps, out_jomps
 
 
 class OffsetMapsHead(torch.nn.Module):
