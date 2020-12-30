@@ -116,7 +116,7 @@ def evaluate_cli():
         raise Exception
 
     if args.dataset in ('test', 'test-dev') and not args.all_images:
-        print('force to use --all-images for this dataset')
+        print('force to use --all-images for this dataset because catIds are unknown')
         args.all_images = True
 
     return args

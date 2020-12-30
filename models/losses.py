@@ -6,7 +6,7 @@ LOG = logging.getLogger(__name__)
 
 TAU = 0.01  # threshold between fore/background in focal L2 loss during training
 GAMMA = 1  # order of scaling factor in focal L2 loss during training
-MARGIN = 0.1  # offset length below this value will not be punished
+MARGIN = 1e-5  # 0.1  # offset length below this value will not be punished
 
 
 def l1(x, t):
@@ -156,14 +156,14 @@ class HeatMapsLoss(object):
 
             if len(bg_hmp) > 0:  # background heatmap loss
                 inter2 = self.hmp_loss(bg_hmp, gt_bghmp, mask_miss)  # type: torch.Tensor
-                if self.sqrt_re:
-                    inter2 = torch.sqrt(inter2 + 1e-4)
                 weighted_bgloss = torch.mul(inter2.sum(), self.stack_weights[stack_i])
                 out2.append(weighted_bgloss)
 
             if len(jomp) > 0:  # jitter offset loss  # todo: add laplace spread and sqrt_re?
                 inter3 = self.jomp_loss(jomp, gt_jomp, None, mask_miss)  # type: torch.Tensor
-                weighted_offloss = torch.mul(inter3.sum(), self.stack_weights[stack_i])
+                if self.sqrt_re:   # normalized by sqrt and the valid offset areas
+                    inter3 = torch.sqrt(inter3 + MARGIN)
+                weighted_offloss = torch.mul(inter3.sum() / (1 + float(inter3.numel())), self.stack_weights[stack_i])
                 out3.append(weighted_offloss)
         LOG.debug('hmp loss at each stack: %s, \t background hmp loss at eack stack: %s'
                   ', \t jitter offset loss at eack stack: %s',
@@ -206,9 +206,9 @@ class OffsetMapsLoss(object):
                 zip(pred_off_stacks, pred_spread_stacks, pred_scale_stacks)):
             inter1 = self.off_loss(pred_off, gt_off, pred_spread, mask_miss)  # inter1 >= 0
 
-            if self.sqrt_re:
+            if self.sqrt_re:  # normalized by sqrt and the valid offset areas
                 inter1 = torch.sqrt(inter1 + MARGIN)  # type: torch.Tensor
-            weighted_offloss = torch.mul(inter1.sum(), self.stack_weights[stack_i])
+            weighted_offloss = torch.mul(inter1.sum() / (1 + float(inter1.numel())), self.stack_weights[stack_i])
             out1.append(weighted_offloss)
 
             if len(pred_s) > 0:
