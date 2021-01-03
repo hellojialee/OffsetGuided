@@ -49,7 +49,7 @@ class PostProcess(torch.nn.Module):
                  feat_stage, hmp_index, omp_index, inter_mode, batch_size)
         self.worker_pool = multiprocessing.Pool(batch_size)
 
-    def generate_poses(self, features, flip_test=False, cat_flip_offs=False):
+    def generate_poses(self, features, flip_test=False, cat_flip_offs=False, scored_off=False):
         # input feature maps regress by the network
         out_hmps, out_bghmp, out_jomps = features[self.hmp_index]  # type: torch.Tensor
 
@@ -66,6 +66,10 @@ class PostProcess(torch.nn.Module):
         # flip augmentation
         if flip_test:
             hmps, jomps, offs, scmps, vector_nd = self.flip_augment(hmps, jomps, offs, scmps, cat_flip_offs, vector_nd)
+
+        if scored_off:
+            joints_f, joints_t = decoder.offset.pack_jtypes(self.skeleton)
+            offs = decoder.scored_offset(hmps, offs, joints_f, joints_t, kernel_size=3)
 
         hmps = torch.nn.functional.interpolate(  # todo: 可以只对hmps缩放，offs和scamps仍然在下采样分辨率下取
             hmps, scale_factor=self.hmp_stride, mode=self.inter_mode)
@@ -116,9 +120,9 @@ class PostProcess(torch.nn.Module):
             flip_offs = torch.flip(offs[n // 2:, ...], [-1])
             # flip the offset_x orientation
             flip_offs[:, :, ::2, :, :] *= -1.0  # (N, limbs, 2, h, w)
-            offs = torch.cat((orig_offs, flip_offs[:, self.limbs_flips[0], ...]), dim=2)
+            offs = torch.cat((orig_offs, flip_offs[:, self.limbs_flips[0], ...]), dim=2)  # (2*N, limbs, 2, h, w)
             offs[:, self.limbs_flips[1], 2:, :] = reserve_offs
-            offs = offs.view((n, -1, h, w))  # # (N, limbs, 4, h, w) -> (N, 4*limbs, h, w)
+            offs = offs.view((n, -1, h, w))  # # (2N, limbs, 4, h, w) -> (2N, 4*limbs, h, w)
             vector_nd = 4
 
         else:
@@ -131,7 +135,7 @@ class PostProcess(torch.nn.Module):
             flip_offs[:, :, ::2, :, :] *= -1.0  # (N, limbs, 2, h, w)
             offs = (orig_offs + flip_offs[:, self.limbs_flips[0], ...]) / 2
             offs[:, self.limbs_flips[1], ...] = reserve_offs
-            offs = offs.view((n, -1, h, w))  # (N, 2*limbs, h, w)
+            offs = offs.view((n//2, -1, h, w))  # (N, 2*limbs, h, w)
 
         if self.include_scale and isinstance(scmps, torch.Tensor):
             orig_scmps = scmps[:n // 2, ...]

@@ -17,7 +17,7 @@ def scored_offset(hmp, off, jtypes_f, jtypes_t, kernel_size=7):
 
     Usage:
          # Construct the start_joints list and then feed the original hmps and offs Tensors
-         joints_f, joints_t = pack_jtypes(skeleton)
+         joints_f, joints_t = decoder.offset.pack_jtypes(skeleton)
          offs = decoder.scored_offset(hmps, offs, joints_f, joints_t)
 
     Returns:

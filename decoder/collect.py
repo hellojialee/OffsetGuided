@@ -114,7 +114,7 @@ class LimbsCollect(object):
             kps_scales_t = self._channel_scales(
                 scmps_hr, kps_inds_t, n, n_limbs, self.jtypes_t)  # (N, L, K, 1)
         else:
-            kps_scales_f = 4 * torch.ones_like(kps_scores_f,   # (N, L, K, 1)
+            kps_scales_f = 4 * torch.ones_like(kps_scores_f,  # (N, L, K, 1)
                                                dtype=kps_scores_f.dtype,
                                                device=kps_scores_f.device)
             kps_scales_t = 4 * torch.ones_like(kps_scores_t,  # (N, L, K, 1)
@@ -130,12 +130,12 @@ class LimbsCollect(object):
             kps_jitter_t = self._channel_jitters(
                 jomps_hr, kps_inds_t, n, n_limbs, self.jtypes_t)  # (N, L, K, 2)
         else:
-            kps_jitter_f = torch.zeros(n, n_limbs, self.K, 2,   # (N, L, K, 2)
-                                               dtype=kps_xys_f.dtype,
-                                               device=kps_xys_f.device)
+            kps_jitter_f = torch.zeros(n, n_limbs, self.K, 2,  # (N, L, K, 2)
+                                       dtype=kps_xys_f.dtype,
+                                       device=kps_xys_f.device)
             kps_jitter_t = torch.zeros(n, n_limbs, self.K, 2,  # (N, L, K, 2)
-                                               dtype=kps_xys_t.dtype,
-                                               device=kps_xys_t.device)
+                                       dtype=kps_xys_t.dtype,
+                                       device=kps_xys_t.device)
 
         # ########################################################################
         # ############### get offset vectors of all limb connections ############
@@ -147,17 +147,31 @@ class LimbsCollect(object):
         kps_off_f = flat_off.gather(-1, kps_inds_f_expand).permute((0, 1, 3, 2))
 
         # ########################################################################
-        # ############### get the regressed end-joints from the start-joints #########
+        # ########## get the regressed end-joints from the start-joints ##########
         # ########################################################################
-        kps_guid_t = kps_xys_f.repeat(1, 1, 1, vector_nd//2) + kps_off_f * self.resize_factor  # (N, L, K, 2)
-        # TODO: 如果想通过jitter refine offset，那么必须根据kps_guid_t指向的坐标位置，重新取出对应位置的jitter！
+        kps_guid_t = kps_xys_f.repeat(1, 1, 1, vector_nd // 2) + kps_off_f * self.resize_factor  # (N, L, K, 2)
+
+        # ########################################################################
+        # ########### use keypoint jitter offset to refine guiding offset #########
+        # ################### but this trick does not help ########################
+        # #########################################################################
+        if self.use_jitter_offset:
+            for i in range(n):
+                for j in range(n_limbs):
+                    for k in range(self.K):
+                        #  be sure to obtain the corresponding refine offset at the kps_guid_t positions
+                        xy = kps_guid_t.int()[i, j, k]
+                        if 0 <= xy[0] < w and 0 <= xy[1] < h:
+                            kps_guid_t[i, j, k] += jomps_hr[i, :, xy[0], xy[1]]
+
         # ########################################################################
         # ############### find limbs from kps_f_lk to kps_t_lm ###############
         # ########################################################################
         # (N, L, K, M, 2)
         kps_guid_t_expand = kps_guid_t.unsqueeze(3).expand(n, n_limbs, self.K, self.K, vector_nd)
         # (N, L, K, M, 2)
-        kps_xys_t_expand = kps_xys_t.repeat(1, 1, 1, vector_nd//2).unsqueeze(2).expand(n, n_limbs, self.K, self.K, vector_nd)
+        kps_xys_t_expand = kps_xys_t.repeat(1, 1, 1, vector_nd // 2).unsqueeze(2).expand(n, n_limbs, self.K, self.K,
+                                                                                         vector_nd)
         dist = (kps_guid_t_expand - kps_xys_t_expand).norm(dim=-1)  # (N, L, K, M)
         """dist_min ensures one keypoint can only be used and paired once."""
         min_dist, min_ind = dist.min(dim=-1)  # 2 * (N, L, K）
@@ -252,6 +266,7 @@ class LimbsCollect(object):
         # shape of kps_inds: (N, L, K, 1)
         assert n_limbs == len(jtypes), 'defined limbs number mismatches'
         jomps_channels = jomps.unsqueeze(1).expand(-1, n_limbs, -1, -1, -1)  # (N, 1, 2, H, W) --> (N, L, 2, H, W)
-        flat_jomps = jomps_channels.view((n, n_limbs, 2, -1)).permute((0, 1, 3, 2))  # (N, L, 2,  H*W) --> (N, L, H*W, 2)
+        flat_jomps = jomps_channels.view((n, n_limbs, 2, -1)).permute(
+            (0, 1, 3, 2))  # (N, L, 2,  H*W) --> (N, L, H*W, 2)
         kps_jitter = flat_jomps.gather(-2, kps_inds.expand(-1, -1, -1, 2))  # (N, L, K, 2), gathered by kps_inds
         return kps_jitter
