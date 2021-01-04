@@ -47,7 +47,7 @@ class OffsetMaps(object):
                                fx=self.in_out_scale, fy=self.in_out_scale,
                                interpolation=cv2.INTER_CUBIC).astype(np.float32) / 255
         # mask_miss area marked by 0.
-        mask_miss = (mask_miss > 0.5)  # use bool instead of .astype(np.float32)
+        mask_miss = (mask_miss > 0.7)  # use bool instead of .astype(np.float32)
         # import matplotlib.pyplot as plt
         # plt.imshow(np.repeat(mask_miss[:, :, np.newaxis], 3, axis=2))  # mask_all
         # plt.show()

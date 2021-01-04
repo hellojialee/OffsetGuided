@@ -30,6 +30,11 @@ class NormalizeAnnotations(Preprocess):
             keypoints[i, :, :3] = np.asarray(ann['keypoints'], dtype=np.float32).reshape(-1, 3)
             keypoints[i, :, 3] = math.sqrt(ann['area']  # fixme: change to the root of bbox?
                                            ) * np.array(COCO_PERSON_SIGMAS)
+
+            # actually small objects (segment area < 32^2) in COCO do not contain keypoint annotations,
+            # thus you can just remove these two line codes
+            if ann['area'] <= 32 * 32:
+                keypoints[i, :, 2] = 0
         # print('ground truth \n', keypoints)
 
         return keypoints
@@ -43,7 +48,7 @@ class NormalizeAnnotations(Preprocess):
             meta = {
                 'joint_num': len(COCO_KEYPOINTS),
                 'offset': np.array([0.0, 0.0]),
-                'scale': np.array([1.0, 1.0]),  # scale factors of width and height
+                'scale': np.array([1.0, 1.0]),  # scale factors of width (x) and height (y)
                 'valid_area': np.array([0.0, 0.0, w, h]),
                 'hflip': False,
                 'rotate': 0.,

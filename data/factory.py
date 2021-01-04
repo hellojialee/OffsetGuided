@@ -216,7 +216,7 @@ if __name__ == '__main__':  # for debug
                 mask_miss = np.repeat(mask_miss.transpose((1, 2, 0)), 3, axis=2)
                 mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
                 plt.imshow(image)
-                plt.imshow(mask_miss, alpha=0.1)  # mask_all
+                plt.imshow(mask_miss, alpha=0.5)  # mask_all
                 plt.show()
 
                 plt.imshow(image)  # We have manually set Opencv earlier: RGB

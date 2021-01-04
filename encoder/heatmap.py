@@ -57,7 +57,7 @@ class HeatMaps(object):
                                fx=self.in_out_scale, fy=self.in_out_scale,
                                interpolation=cv2.INTER_CUBIC).astype(np.float32) / 255
         # mask_miss area marked by 0.
-        mask_miss = (mask_miss > 0.5)  # .astype(np.float32)  bool mask_miss
+        mask_miss = (mask_miss > 0.7)  # .astype(np.float32)  bool mask_miss
 
         # # for IDE debug only
         # import matplotlib.pyplot as plt

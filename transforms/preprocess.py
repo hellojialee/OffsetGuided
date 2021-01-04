@@ -10,7 +10,7 @@ class Preprocess(metaclass=ABCMeta):
         """Implementation of preprocess operation."""
 
     @staticmethod
-    def affine_keypoint_inverse(keypoints, meta):  # has been checked, it's OK but wrong when flipping
+    def affine_keypoint_inverse(keypoints, meta):
         """Inverse transform for WarpAffine augmentation in a single image"""
         keypoints = keypoints.copy()
         M = np.linalg.inv(meta['affine3×3mat'])
@@ -21,6 +21,7 @@ class Preprocess(metaclass=ABCMeta):
             M[0:2],
             original_joints.transpose([0, 2, 1])).transpose([0, 2, 1])
         keypoints[:, :, 0:2] = affine_joints
+        keypoints[:, :, 3] /= np.sqrt(np.prod(meta['scale']))  # keypoint scales
         # channel indexing.
         keypoints = keypoints[:, meta['joint_channel_ind'], :]
         return keypoints

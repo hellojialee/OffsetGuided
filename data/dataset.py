@@ -163,8 +163,9 @@ class CocoKeypoints(torch.utils.data.Dataset):
 
             # mask_all record all persons' masks in the current image
             mask_all = np.bitwise_or(mask, mask_all)
-
-            if p["num_keypoints"] <= 0:  # handle persons without keypoints
+            # Notice: small objects (segment area < 32^2) in COCO do not contain keypoint annotations,
+            #   thus in fact you needn't use "or p["area"] <= 32 * 32"
+            if p["num_keypoints"] <= 0 or p["area"] <= 32 * 32:
                 mask_miss = np.bitwise_or(mask, mask_miss)
 
         # make mask_miss and mask_all

@@ -153,9 +153,9 @@ class LimbsCollect(object):
 
         # ########################################################################
         # ########### use keypoint jitter offset to refine guiding offset #########
-        # ################### but this trick does not help ########################
+        # ################ but this trick does not help at all ####################
         # #########################################################################
-        if self.use_jitter_offset:
+        if self.include_jitter_offset and self.use_jitter_offset:
             for i in range(n):
                 for j in range(n_limbs):
                     for k in range(self.K):
@@ -250,7 +250,7 @@ class LimbsCollect(object):
         kps_xys = torch.cat((kps_xs, kps_ys), dim=-1)
         # ######## set candidate keypoints with low responses off the image #######
         kps_xys[kps_scores.expand_as(kps_xys) < thresh] -= 100000
-        return kps_inds, kps_scores.float(), kps_xys.float()
+        return kps_inds, kps_scores.float(), kps_xys.float()  # 4 * kps_xys.float() + 1.5
 
     @staticmethod
     def _channel_scales(scsmp, kps_inds, n, n_limbs, jtypes):

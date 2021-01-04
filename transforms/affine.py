@@ -149,7 +149,7 @@ class WarpAffineTransforms(Preprocess):
             self._show_affine_result(anns, image, mask_miss)
 
         meta['hflip'] = self.flip
-        meta['scale'] *= self.scale
+        meta['scale'] *= np.array([self.scale_x, self.scale_y])
         meta['rotate'] += self.rotate
         meta['affine3×3mat'] = affine_mat.dot(meta['affine3×3mat'])
         meta['width_height'] = np.array(self.in_size)
@@ -215,7 +215,7 @@ class WarpAffineTransforms(Preprocess):
         for i, p in enumerate(anns):
             for j, xyvs in enumerate(p):
 
-                anns[i, j, 3] *= self.scale  # rescale the keypoint size
+                anns[i, j, 3] *= math.sqrt(self.scale_x * self.scale_y)  # rescale the keypoint size
                 # print(anns[i, j, 3])  # keypoint scales mostly vary form 0.8 to 22.
 
                 if xyvs[0] <= 0 or xyvs[1] <= 0 \
