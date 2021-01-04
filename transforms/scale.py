@@ -73,7 +73,7 @@ def _scale(image, anns, meta, mask_miss, target_w, target_h, mode):
 
 
 class RescaleLongAbsolute(Preprocess):
-    # 根据给出的具体尺寸进行缩放，用于测试时调整图像尺寸，根据最长的变成确定缩放系数
+    """ According to the given longest image edge to zoom out/in the image during testing"""
     def __init__(self, long_edge, *, resample=cv2.INTER_CUBIC):
         self.long_edge = long_edge
         self.mode = resample
@@ -99,6 +99,7 @@ class RescaleLongAbsolute(Preprocess):
 
 
 class RescaleHighAbsolute(Preprocess):
+    """According to the given image height to zoom out/in the image during testing"""
     def __init__(self, height_edge, *, resample=cv2.INTER_CUBIC):
         self.height_edge = height_edge
         self.mode = resample
@@ -117,4 +118,19 @@ class RescaleHighAbsolute(Preprocess):
 
         target_w, target_h = int(w * s), int(self.height_edge)
 
+        return _scale(image, anns, meta, mask_miss, target_w, target_h, self.mode)
+
+
+class RescaleRelative(Preprocess):
+    def __init__(self, scale_factor=1.0, *, resample=cv2.INTER_CUBIC):
+        self.scale_factor = scale_factor
+        self.mode = resample
+
+    def __call__(self, image, anns, meta, mask_miss=None):
+        if mask_miss is not None:
+            warnings.warn('mask_miss transformation is not implemented, '
+                          'cannot be used during training')
+        h, w = image.shape[:2]
+
+        target_w, target_h = int(w * self.scale_factor), int(h * self.scale_factor)
         return _scale(image, anns, meta, mask_miss, target_w, target_h, self.mode)

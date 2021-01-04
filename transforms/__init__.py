@@ -15,9 +15,9 @@ import torchvision
 from .annotations import AnnotationJitter, NormalizeAnnotations
 from .compose import Compose
 from .image import Blur, ImageTransform, JpegCompression, ColorTint, Gray
-from .pad import CenterPad, RightDownPad
+from .pad import CenterPad, RightDownPad, SquarePad
 from .random import RandomApply
-from .scale import RescaleLongAbsolute, RescaleHighAbsolute
+from .scale import RescaleLongAbsolute, RescaleHighAbsolute, RescaleRelative
 from .affine import WarpAffineTransforms
 from .affine import FixedAugParams
 

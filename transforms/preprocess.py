@@ -1,3 +1,6 @@
+"""
+Borrowed from openpifpaf
+"""
 from abc import ABCMeta, abstractmethod
 import copy
 import numpy as np
