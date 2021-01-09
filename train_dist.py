@@ -179,7 +179,7 @@ def main():
 
     train_data, val_data = data.dataset_factory(args, preprocess,
                                                 target_transform)
-
+    # concat_data = torch.utils.data.ConcatDataset([train_data, val_data])  # More training data
     model, lossfuns = models.model_factory(args)
 
     if args.sync_bn:
@@ -243,11 +243,11 @@ def main():
 
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(
-            train_data)
+            train_data)  # concat_data
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_data)
 
     # 创建数据加载器，在训练和验证步骤中喂数据
-    train_loader = torch.utils.data.DataLoader(train_data,
+    train_loader = torch.utils.data.DataLoader(train_data,  # concat_data
                                                batch_size=args.batch_size,
                                                shuffle=(train_sampler is None),
                                                num_workers=args.loader_workers,

@@ -41,12 +41,12 @@ def draw_limb_offset(hmp, image, off, show_limb_idx, skeleton, s=5, thre=0.3):
     joint_f, joint_t = skeleton[connect_idx]
     with canvas() as ax:
         ax.imshow(image)
-        ax.imshow(hmp[:, :, joint_f], alpha=0.5)
+        ax.imshow(hmp[:, :, joint_f], alpha=0.8)
         ax.set_title(f'response of joint {joint_f}')
 
     with canvas() as ax:
         ax.imshow(image)
-        ax.imshow(hmp[:, :, joint_t], alpha=0.5)
+        ax.imshow(hmp[:, :, joint_t], alpha=0.8)
         ax.set_title(f'response of joint {joint_t}')
 
     # draw arrows

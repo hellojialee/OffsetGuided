@@ -58,7 +58,7 @@ def evaluate_cli():
     decoder.decoder_cli(parser)
 
     parser.add_argument('--dump-name',  # TODO: edit this name each evaluation
-                        default='hourglass104_focal_l2_epoch_121__distmax40_640_input_1scale_flip_hmpoff_lmargin01_test',
+                        default='hourglass104_focal_l2_epoch_219__distmax40_640_input_1scale_flip_hmpoff_val_test',
                         type=str, help='detection file name')
 
     parser.add_argument('--dataset', choices=('val', 'test', 'test-dev'), default='val',
@@ -157,7 +157,7 @@ def run_images():
         preprocess_transformations = [
             transforms.NormalizeAnnotations(),
             transforms.RescaleLongAbsolute(args.long_edge),
-            transforms.CenterPad(args.long_edge),  # CenterPad may lead to higher metrics
+            transforms.CenterPad(args.long_edge),
         ]
 
     preprocess_transformations += [

@@ -2,6 +2,7 @@
 import argparse
 import logging
 import cv2
+import matplotlib
 import matplotlib.pyplot as plt
 import time
 import datetime
@@ -190,7 +191,9 @@ def test(val_loader, model, criterion, epoch, processor):
             skeleton = encoder.OffsetMaps.skeleton
             keypoint_painter = show.KeypointPainter(
                 show_box=False,
-                # color_connections=True, linewidth=5,
+                # color_connections=True,
+                linewidth=2.5,
+                solid_threshold=0.06,  # limbs below this response are drawn with dashed lines
             )
             with show.image_canvas(image,
                                    # output_path + '.keypoints.png',
@@ -208,6 +211,7 @@ def test(val_loader, model, criterion, epoch, processor):
                             for l in multi_losses],
             'loss': round(to_python_float(loss.detach()), 6),
         })
+
         if isinstance(args.show_hmp_idx, int):
             hmps = outputs[0][0][1]
             offs = outputs[1][0][1]
@@ -226,7 +230,7 @@ def test(val_loader, model, criterion, epoch, processor):
             dets = decoder.topK_channel(filter_map, K=50)
 
             dets = [det.cpu().numpy() for det in dets]
-            # todo: keymap改成根据image进行缩放
+            # keymap是stride分辨率下的，没有缩放到image尺寸
             keymap = np.zeros((args.square_length,
                                args.square_length))
             for yy, xx in zip(dets[2][0, args.show_hmp_idx], dets[3][0, args.show_hmp_idx]):
@@ -238,20 +242,20 @@ def test(val_loader, model, criterion, epoch, processor):
             hmps = outputs[0][0][1]
             offs = outputs[1][0][1]
             sizeHW = (args.square_length, args.square_length)
-            torch.cuda.synchronize()  # 需要吗？
+            torch.cuda.synchronize()  # 需要吗？没有print之类的函数时，是需要的，等待cuda上的流程运行完
             t0 = time.time()
             hmps = torch.nn.functional.interpolate(hmps, size=sizeHW, mode="bicubic")
             offs = torch.nn.functional.interpolate(offs, size=sizeHW, mode="bicubic")
-            torch.cuda.synchronize()  # 需要吗？
+            torch.cuda.synchronize()
             t1 = time.time()
             tt1 = t1 - t0
             LOG.info('interpolation tims: %.6f', tt1)
 
             gen = decoder.LimbsCollect(1, 1, include_scale=True,
-                                       topk=96, thre_hmp=0.06)
+                                       topk=64, thre_hmp=args.thre_hmp)
             t2 = time.time()
 
-            limbs = gen.generate_limbs(hmps, offs, 8 * torch.ones_like(hmps))
+            limbs = gen.generate_limbs(hmps, None, offs, 4 * torch.ones_like(hmps))
             limbs = limbs.cpu().numpy()
 
             torch.cuda.synchronize()  # 需要吗？
@@ -265,7 +269,7 @@ def test(val_loader, model, criterion, epoch, processor):
                 xyv2 = connects[:, 3:6]
                 len_delta = connects[:, 8]
                 for i in range(len(xyv1)):
-                    if xyv1[i, 0] > 0 and xyv2[i, 0] > 0 and len_delta[i] <= 10:
+                    if xyv1[i, 0] > 0 and xyv2[i, 0] > 0 and len_delta[i] <= args.dist_max:
                         x1, y1 = xyv1[i, :2].tolist()
                         x2, y2 = xyv2[i, :2].tolist()
                         plt.plot([x1, x2], [-y1, -y2], color='r')
@@ -275,25 +279,29 @@ def test(val_loader, model, criterion, epoch, processor):
             plt.title('all candidate limbs')
             plt.show()
 
-            # assemble = decoder.GreedyGroup(0.1, use_scale=True, sort_dim=2)
-            # t0 = time.time()
-            # # limbs_list = [(image_limb,) for i, image_limb in enumerate(limbs)]  # each element must be a tuple
-            # # starmap blocks the main process to wait all pools, while starmap_async is only little faster
-            # batch_poses = worker_pool.starmap(assemble.group_skeletons, zip(limbs))
-            # #
-            # image_poses = batch_poses[3]
-            # t1 = time.time() - t0
-            # LOG.info('\nGreedy grouping time: %.6f\n %d person poses', t1, len(image_poses))
+            assemble = decoder.GreedyGroup(args.person_thre, use_scale=True, sort_dim=2)
+            t0 = time.time()
+            worker_pool = multiprocessing.Pool(args.batch_size)
+            # limbs_list = [(image_limb,) for i, image_limb in enumerate(limbs)]  # each element must be a tuple
+            # starmap blocks the main process to wait all pools, while starmap_async is only little faster
+            batch_poses = worker_pool.starmap(assemble.group_skeletons, zip(limbs))
+            #
+            image_poses = batch_poses[0]
+            t1 = time.time() - t0
+            LOG.info('\nGreedy grouping time: %.6f\n %d person poses', t1, len(image_poses))
 
-            # for pose_idx, pose in enumerate(image_poses):
-            #     xyvs = pose[:, :3]
-            #     for i in range(len(xyvs)):
-            #         if xyvs[i, 0] > 0 and xyvs[i, 1] > 0 and xyvs[i, 2] > 0.1:
-            #             plt.scatter([xyvs[i, 0]], [-xyvs[i, 1]], color='g')
-            #             plt.xlim((0, args.square_length))
-            #             plt.ylim((-args.square_length, 0))
-            # plt.title('output of greedy assignment algorithm')
-            # plt.show()
+            draw_color = ['g', 'r', 'b', 'c', 'm', 'y', 'k']
+            for pose_idx, pose in enumerate(image_poses):
+                color_id = pose_idx % len(draw_color)
+                color = matplotlib.cm.get_cmap('tab20')((pose_idx % 20 + 0.05) / 20)
+                xyvs = pose[:, :3]
+                for i in range(len(xyvs)):
+                    if xyvs[i, 0] > 0 and xyvs[i, 1] > 0 and xyvs[i, 2] > args.thre_hmp:
+                        plt.scatter([xyvs[i, 0]], [-xyvs[i, 1]], color=color)
+                        plt.xlim((0, args.square_length))
+                        plt.ylim((-args.square_length, 0))
+            plt.title('output of greedy assignment algorithm')
+            plt.show()
 
         if isinstance(args.show_limb_idx, int):
             hmps = outputs[0][0][1].cpu().numpy()
@@ -306,7 +314,7 @@ def test(val_loader, model, criterion, epoch, processor):
             skeleton = encoder.OffsetMaps.skeleton
             # first ,we should roughly rescale the image into the range of [0, 1]
             image = np.clip((image + 2.0) / 4.0, 0.0, 1.0)
-            show.draw_limb_offset(hmp, image, off, args.show_limb_idx, skeleton, s=7, thre=0.1)
+            show.draw_limb_offset(hmp, image, off, args.show_limb_idx, skeleton, s=7, thre=0.2)
 
         if batch_idx % args.print_freq == 0:
             reduced_loss = loss.data
