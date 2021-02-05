@@ -161,7 +161,7 @@ class HeatMapsLoss(object):
 
             if len(jomp) > 0:  # jitter offset loss  # todo: add laplace spread and sqrt_re?
                 inter3 = self.jomp_loss(jomp, gt_jomp, None, mask_miss)  # type: torch.Tensor
-                if self.sqrt_re:   # normalized by sqrt and the valid offset areas
+                if self.sqrt_re:   # normalized by sqrt as well as the valid offset areas
                     inter3 = torch.sqrt(inter3 + MARGIN*0.1)
                 weighted_offloss = torch.mul(inter3.sum() / (1 + float(inter3.numel())), self.stack_weights[stack_i])
                 out3.append(weighted_offloss)
@@ -206,14 +206,15 @@ class OffsetMapsLoss(object):
                 zip(pred_off_stacks, pred_spread_stacks, pred_scale_stacks)):
             inter1 = self.off_loss(pred_off, gt_off, pred_spread, mask_miss)  # inter1 >= 0
 
-            if self.sqrt_re:  # normalized by sqrt and the valid offset areas
+            if self.sqrt_re:  # normalized by sqrt as well as the valid offset areas
                 inter1 = torch.sqrt(inter1 + MARGIN)  # type: torch.Tensor
             weighted_offloss = torch.mul(inter1.sum() / (1 + float(inter1.numel())), self.stack_weights[stack_i])
             out1.append(weighted_offloss)
 
             if len(pred_s) > 0:
                 inter2 = self.s_loss(pred_s, gt_s, mask_miss)  # type: torch.Tensor
-                weighted_sloss = torch.mul(inter2.sum(), self.stack_weights[stack_i])
+                # normalized by the valid scale label areas
+                weighted_sloss = torch.mul(inter2.sum() / (1 + float(inter2.numel())), self.stack_weights[stack_i])
                 out2.append(weighted_sloss)
         LOG.debug('connection offset loss at each stack: %s, \t keypoint scale loss at each stack: %s'
                   , torch.tensor(out1).cpu().numpy().tolist(), torch.tensor(out2).cpu().numpy().tolist())

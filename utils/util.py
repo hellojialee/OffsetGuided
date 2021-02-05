@@ -33,21 +33,18 @@ def adjust_learning_rate(learning_rate, world_size, optimizer,
 
     lr = learning_rate * world_size * (0.2 ** factor)
 
-    if epoch > 121:  # FIXME: change the LR schedule
-        lr = 5e-5 * world_size
+    if epoch < 130:  # FIXME: change the LR schedule
+        lr = learning_rate * world_size
 
-    if epoch > 130:
-        lr = 5e-5 * world_size
-
-    if epoch > 140:
-        lr = 5e-6 * world_size
+    if 130 <= epoch < 150:
+        lr = 0.1 * learning_rate * world_size
 
     """Warmup the learning rate"""
     if use_warmup:
-        if epoch < 12:
+        if epoch < 15:
             # print('=============>  Using warm-up learning rate....')
             lr = lr * float(1 + step + epoch * len_epoch) / (
-                    12. * len_epoch)  # len_epoch=len(train_loader)
+                    15. * len_epoch)  # len_epoch=len(train_loader)
 
     # if(args.local_rank == 0):
     #     print("epoch = {}, step = {}, lr = {}".format(epoch, step, lr))

@@ -58,7 +58,7 @@ def draw_limb_offset(hmp, image, off, show_limb_idx, skeleton, s=5, thre=0.3):
     U = ma.masked_array(U, mask=M)  # mask out
     V = ma.masked_array(V, mask=M)
     with canvas() as ax:
-        ax.imshow(image)  # , alpha=.5
+        ax.imshow(image, alpha=0.5)  # , alpha=.5
         ax.quiver(X[::s, ::s], Y[::s, ::s], U[::s, ::s], V[::s, ::s],
                   angles='xy', scale_units='xy', scale=1, color='r',
                   alpha=None, headaxislength=10, width=0.001)

@@ -180,7 +180,7 @@ class NetworkWrapper(torch.nn.Module):
         super(NetworkWrapper, self).__init__()
         self.basenet = basenet
         # Notice!  subnets in list or dict must be warped
-        # by ModuleList to register trainable params
+        #   by ModuleList to register trainable params
         self.headnets = torch.nn.ModuleList(headnets)
         self.head_strides = [hn.stride for hn in headnets]
         self.head_names = [hn.head_name for hn in headnets]

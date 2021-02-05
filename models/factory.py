@@ -13,7 +13,7 @@ def net_cli(parser):
                        help='randomly initialize the basenet and headnets, '
                             'just set it to True if you are not certain')
     group.add_argument('--checkpoint-whole', default=None, type=str,
-                       help='the checkpoint pach to the whole model (basenet+headnets)')
+                       help='the checkpoint path to the whole model (basenet+headnets)')
 
     group = parser.add_argument_group('base network configuration')
     group.add_argument('--basenet', default='hourglass104',
