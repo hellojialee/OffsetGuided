@@ -29,7 +29,7 @@ except ImportError:
     raise ImportError(
         "Please install apex from https://www.github.com/nvidia/apex to run this example.")
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "1, 2"
+# os.environ['CUDA_VISIBLE_DEVICES'] = "1, 2"
 LOG = logging.getLogger(__name__)
 
 
