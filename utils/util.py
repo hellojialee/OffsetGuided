@@ -33,11 +33,11 @@ def adjust_learning_rate(learning_rate, world_size, optimizer,
 
     lr = learning_rate * world_size * (0.2 ** factor)
 
-    if epoch < 60:
+    if epoch < 60:  # FIXME: change the LR schedule
         lr = learning_rate * world_size
 
     if 60 <= epoch < 90:
-        lr = 0.1 * learning_rate * world_size
+        lr = learning_rate * world_size
 
     if 90 <= epoch < 120:
         lr = 0.1 * learning_rate * world_size

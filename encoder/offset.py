@@ -19,7 +19,7 @@ class OffsetMaps(object):
     """
     fill_scale_size = 7  # the diameter of the filled area
     # around keypoints will be filled with joint scale and adjacent-joint offset
-    min_scale = 0.1  # minimum keypoint scale
+    min_jscale = 1.0  # keypoint scale below this minimum are ignored # refer to transforms/annotations.py:27
     skeleton = COCO_PERSON_SKELETON  # human skeleton connections
     include_scale = True
 
@@ -38,7 +38,7 @@ class OffsetMaps(object):
             print(f'network stride: {self.stride: .3f} is not a integer')
 
         omps = OffsetMapGenerator(self.input_size, self.stride,
-                                  self.fill_scale_size, self.min_scale,
+                                  self.fill_scale_size, self.min_jscale,
                                   self.skeleton)
 
         offset_maps, scale_maps = omps.create_offsetmaps(anns, meta)
@@ -71,7 +71,7 @@ class OffsetMapGenerator(object):
     """Generate navigator offset and scale feature map of keypoints.
     """
 
-    def __init__(self, input_size, stride, fill_scale_size, min_scale, skeleton):
+    def __init__(self, input_size, stride, fill_scale_size, min_jscale, skeleton):
 
         self.in_w = input_size[0]
         self.in_h = input_size[1]
@@ -79,7 +79,7 @@ class OffsetMapGenerator(object):
         # the area around keypoints will be filled with joint scale
         self.fill_scale_size = fill_scale_size
         # minimum keypoint scale
-        self.min_scale = min_scale
+        self.min_jscale = min_jscale
         self.skeleton = skeleton
 
         # cached common parameters which same for all iterations and all pictures
@@ -188,4 +188,5 @@ class OffsetMapGenerator(object):
 
             # overlap the offset values on the basis of the offset lengths
             offset_patch[mask] = offset_mesh[mask]
-            scale_patch[mask] = max(joint1[3], self.min_scale)
+            scale_patch[mask] = joint1[3] if joint1[3] >= self.min_jscale else np.nan
+

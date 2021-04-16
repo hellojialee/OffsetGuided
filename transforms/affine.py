@@ -162,7 +162,8 @@ class WarpAffineTransforms(Preprocess):
         import matplotlib.pyplot as plt
 
         for i, xyvs in enumerate(anns[anns[:, :, 2] > 0]):
-            cv2.circle(image, (int(xyvs[0]), int(xyvs[1])),
+            if xyvs[3] > 0:
+                cv2.circle(image, (int(xyvs[0]), int(xyvs[1])),
                        int(xyvs[3]), color=[126, 0, 100], thickness=2)
 
         plt.imshow(image)

@@ -11,6 +11,26 @@ from config.coco_data import COCO_KEYPOINTS, COCO_PERSON_SIGMAS
 LOG = logging.getLogger(__name__)
 
 
+def scale_from_keypoints(keypoints):
+    """The keypoint scale defined by the square root of the enveloping box of keypoints.
+    ####  Copied from PIFPAF  ####
+    """
+    visible = keypoints[:, 2] > 0
+    if not np.any(visible):
+        raise Exception("no visiable keypoint in this instance")
+
+    area = (
+        (np.max(keypoints[visible, 0]) - np.min(keypoints[visible, 0])) *
+        (np.max(keypoints[visible, 1]) - np.min(keypoints[visible, 1]))
+    )
+    scale = np.sqrt(area)
+    if scale < 0.01:
+        scale = np.nan
+
+    LOG.debug('instance scale = %.3f', scale)
+    return scale
+
+
 class NormalizeAnnotations(Preprocess):
     """
     Convert keypoint annotation into numpy array of shape (num_people, 17, 4)
@@ -28,8 +48,11 @@ class NormalizeAnnotations(Preprocess):
         for i, ann in enumerate(anns):
             # notice the reshape's mechanism: wrap the every 3 element firstly.
             keypoints[i, :, :3] = np.asarray(ann['keypoints'], dtype=np.float32).reshape(-1, 3)
-            keypoints[i, :, 3] = math.sqrt(ann['area']  # fixme: change to the root of bbox?
-                                           ) * np.array(COCO_PERSON_SIGMAS)
+            #  TODO: the root of bbox? areas? or the keypoints bbox
+            # keypoints[i, :, 3] = math.sqrt(ann['area']
+            #                                ) * np.array(COCO_PERSON_SIGMAS)
+            scale = scale_from_keypoints(keypoints[i, :, :3])
+            keypoints[i, :, 3] = scale * np.array(COCO_PERSON_SIGMAS)
 
             # actually small objects (segment area < 32^2) in COCO do not contain keypoint annotations,
             # thus you can just remove these two line codes

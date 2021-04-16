@@ -29,7 +29,7 @@ def encoder_cli(parser):
                        type=int,
                        help='the area around the keypoint are filled with '
                             'joint scale values and offset.')
-    group.add_argument('--min_scale', default=OffsetMaps.min_scale,
+    group.add_argument('--min_jscale', default=OffsetMaps.min_jscale,
                        type=float, help='set minimum keypoint scale')
 
 
@@ -48,7 +48,7 @@ def encoder_factory(args, strides=None):
 
     # configure scalemap
     OffsetMaps.fill_scale_size = args.fill_scale_size
-    OffsetMaps.min_scale = args.min_scale
+    OffsetMaps.min_jscale = args.min_jscale
     OffsetMaps.include_scale = args.include_scale  # defined in head.py
 
     return factory_heads(args.headnets, args.square_length, strides)
