@@ -68,7 +68,7 @@ class LossChoice(object):
 
     @staticmethod
     def scale_l1_loss(pred, gt, mask_miss):
-        """
+        """Element-wise l1 loss for keypoint scales
         Args:
             pred: inferred tensor of shape (N, C, out_h, out_w)
             gt: groudtruth tensor of shape (N, C, out_h, out_w)
@@ -81,6 +81,17 @@ class LossChoice(object):
         """sqrt_re may be used in lossfun Class to rescale the delta x, y element-wisely,
         other than based on vetctor length """
         return tensor_loss(pred, gt, mask_miss, l1)
+
+    @staticmethod
+    def vector_l1_loss(pred, gt, _, mask_miss):
+        delta = (pred - gt)  # type: torch.Tensor
+        n, c, h, w = delta.size()
+        # we must reshape 2 before -1, because the GT offset sequence x1, y1, x2, y2, ...
+        # view and norm: (N, C//2, 2, out_h, out_w) -> (N, C//2, out_h, out_w)
+        norm = delta.view((n, -1, 2, h, w)).norm(dim=2)
+        labelled_norm = norm[mask_miss.expand_as(norm)]
+        mask = torch.isfinite(labelled_norm)
+        return labelled_norm[mask]
 
     @staticmethod
     def offset_laplace_loss(pred, gt, logb, mask_miss):
@@ -161,8 +172,9 @@ class HeatMapsLoss(object):
 
             if len(jomp) > 0:  # jitter offset loss  # todo: add laplace spread and sqrt_re?
                 inter3 = self.jomp_loss(jomp, gt_jomp, None, mask_miss)  # type: torch.Tensor
+                inter3 = inter3[inter3 >= 0.1 * MARGIN]  # ignore jitter offset loss below MARGIN
                 if self.sqrt_re:   # normalized by sqrt as well as the valid offset areas
-                    inter3 = torch.sqrt(inter3 + MARGIN*0.1)
+                    inter3 = torch.sqrt(inter3)
                 weighted_offloss = torch.mul(inter3.sum() / (1 + float(inter3.numel())), self.stack_weights[stack_i])
                 out3.append(weighted_offloss)
         LOG.debug('hmp loss at each stack: %s, \t background hmp loss at eack stack: %s'
@@ -205,9 +217,9 @@ class OffsetMapsLoss(object):
         for stack_i, (pred_off, pred_spread, pred_s) in enumerate(
                 zip(pred_off_stacks, pred_spread_stacks, pred_scale_stacks)):
             inter1 = self.off_loss(pred_off, gt_off, pred_spread, mask_miss)  # inter1 >= 0
-
+            inter1 = inter1[inter1 >= MARGIN]  # ignore guiding offset loss below MARGIN
             if self.sqrt_re:  # normalized by sqrt as well as the valid offset areas
-                inter1 = torch.sqrt(inter1 + MARGIN)  # type: torch.Tensor
+                inter1 = torch.sqrt(inter1)  # type: torch.Tensor
             weighted_offloss = torch.mul(inter1.sum() / (1 + float(inter1.numel())), self.stack_weights[stack_i])
             out1.append(weighted_offloss)
 
