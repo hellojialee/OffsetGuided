@@ -1,4 +1,5 @@
-"""Head networks. Regress heatmaps, offset and scale, etc."""
+"""Head networks with 3*3 conv layers + 1*1 conv layers as regression outputs.
+Regress heatmaps, offset and scale, etc."""
 
 import logging
 import torch
@@ -30,19 +31,31 @@ class HeatMapsHead(torch.nn.Module):
         self.head_name = head_name
         self.n_stacks = n_stacks
         self.hp_convs = torch.nn.ModuleList([
-            torch.nn.Conv2d(inp_dim, self.n_keypoints,
-                            kernel_size, padding=padding, dilation=dilation)
+            torch.nn.Sequential(
+                torch.nn.Conv2d(inp_dim, inp_dim,
+                                3, padding=1, dilation=dilation),
+                torch.nn.ReLU(inplace=True),
+                torch.nn.Conv2d(inp_dim, self.n_keypoints,
+                                kernel_size, padding=padding, dilation=dilation))
             for _ in range(n_stacks)
         ])
         self.bghp_convs = torch.nn.ModuleList([
-            torch.nn.Conv2d(inp_dim, self.bg_channel,
-                            kernel_size, padding=padding, dilation=dilation)
-            if self.include_background else torch.nn.Sequential()
+            torch.nn.Sequential(
+                torch.nn.Conv2d(inp_dim, inp_dim,
+                                3, padding=1, dilation=dilation),
+                torch.nn.ReLU(inplace=True),
+                torch.nn.Conv2d(inp_dim, self.bg_channel,
+                                kernel_size, padding=padding, dilation=dilation)
+                if self.include_background else torch.nn.Sequential())
             for _ in range(n_stacks)])
         self.jitter_convs = torch.nn.ModuleList([
-            torch.nn.Conv2d(inp_dim, self.jo_channel,
-                            kernel_size, padding=padding, dilation=dilation)
-            if self.include_jitter_offset else torch.nn.Sequential()
+            torch.nn.Sequential(
+                torch.nn.Conv2d(inp_dim, inp_dim,
+                                3, padding=1, dilation=dilation),
+                torch.nn.ReLU(inplace=True),
+                torch.nn.Conv2d(inp_dim, self.jo_channel,
+                                kernel_size, padding=padding, dilation=dilation)
+                if self.include_jitter_offset else torch.nn.Sequential())
             for _ in range(n_stacks)])
 
     def forward(self, args):
@@ -93,23 +106,35 @@ class OffsetMapsHead(torch.nn.Module):
 
         # regression for offset vector x, y
         self.reg_convs = torch.nn.ModuleList([
-            torch.nn.Conv2d(inp_dim, 2 * self.n_skeleton,
-                            kernel_size, padding=padding, dilation=dilation)
+            torch.nn.Sequential(
+                torch.nn.Conv2d(inp_dim, inp_dim,
+                                3, padding=1, dilation=dilation),
+                torch.nn.ReLU(inplace=True),
+                torch.nn.Conv2d(inp_dim, 2 * self.n_skeleton,
+                                kernel_size, padding=padding, dilation=dilation))
             for _ in range(n_stacks)
         ])
 
         # spread_b
         self.spread_convs = torch.nn.ModuleList([
-            torch.nn.Conv2d(inp_dim, self.n_skeleton,
-                            kernel_size, padding=padding, dilation=dilation)
-            if self.include_spread else torch.nn.Sequential()
+            torch.nn.Sequential(
+                torch.nn.Conv2d(inp_dim, inp_dim,
+                                3, padding=1, dilation=dilation),
+                torch.nn.ReLU(inplace=True),
+                torch.nn.Conv2d(inp_dim, self.n_skeleton,
+                                kernel_size, padding=padding, dilation=dilation)
+                if self.include_spread else torch.nn.Sequential())
             for _ in range(n_stacks)])
 
         # regression for keypoint scale
         self.scale_convs = torch.nn.ModuleList([
-            torch.nn.Conv2d(inp_dim, self.n_keypoints,
-                            kernel_size, padding=padding, dilation=dilation)
-            if self.include_scale else torch.nn.Sequential()
+            torch.nn.Sequential(
+                torch.nn.Conv2d(inp_dim, inp_dim,
+                                3, padding=1, dilation=dilation),
+                torch.nn.ReLU(inplace=True),
+                torch.nn.Conv2d(inp_dim, self.n_keypoints,
+                                kernel_size, padding=padding, dilation=dilation)
+                if self.include_scale else torch.nn.Sequential())
             for _ in range(n_stacks)
         ])
 
@@ -226,6 +251,10 @@ if __name__ == '__main__':
     headnames = ['hmp', 'omp']
 
     head_nets = headnets_factory(headnames, 2, [4, 4], 256, True, True, True, True)
+    head_nets_1 = head_nets[0].cuda()
+    input = torch.rand(2, 6, 256, 128, 128).cuda()
+    out = head_nets_1(input)
+    print(out.shape)
     t = id(head_nets[0].n_keypoints) == id(head_nets[1].n_keypoints)
     head_nets[1].n_keypoints = 20
     t2 = id(head_nets[0].n_keypoints) == id(head_nets[1].n_keypoints)
