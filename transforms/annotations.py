@@ -48,10 +48,10 @@ class NormalizeAnnotations(Preprocess):
         for i, ann in enumerate(anns):
             # notice the reshape's mechanism: wrap the every 3 element firstly.
             keypoints[i, :, :3] = np.asarray(ann['keypoints'], dtype=np.float32).reshape(-1, 3)
-            #  TODO: the root of bbox? areas? or the keypoints bbox
-            # keypoints[i, :, 3] = math.sqrt(ann['area']
-            #                                ) * np.array(COCO_PERSON_SIGMAS)
-            scale = scale_from_keypoints(keypoints[i, :, :3])
+            #  TODO: the root of areas? or instance bbox ? or the keypoints bbox?
+            # scale = math.sqrt(ann['area'])  # root of areas
+            # scale = scale_from_keypoints(keypoints[i, :, :3])  # root of instance bbox
+            scale = math.sqrt(ann['bbox'][-1] * ann['bbox'][-2])  # root of keypoints bbox
             keypoints[i, :, 3] = scale * np.array(COCO_PERSON_SIGMAS)
 
             # actually small objects (segment area < 32^2) in COCO do not contain keypoint annotations,

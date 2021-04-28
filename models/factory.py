@@ -63,7 +63,7 @@ def net_cli(parser):
                        choices=['offset_l1_loss', 'vector_l1_loss', 'offset_laplace_loss'],
                        help='loss for jitter offeset regression')
     group.add_argument('--offset-loss', default='offset_l1_loss',
-                       choices=['offset_l1_loss', 'vector_l1_loss', 'offset_laplace_loss'],
+                       choices=['offset_l1_loss', 'vector_l1_loss', 'offset_laplace_loss', 'offset_instance_l1_loss'],
                        help='loss for offeset regression')
     group.add_argument('--sqrt-re', default=False, action='store_true',
                        help='rescale the offset loss using torch.sqrt')

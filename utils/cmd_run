@@ -42,3 +42,9 @@ python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-ch
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_222_epoch.pth --resume --weight-decay 0 --drop-optim-state --hmp-loss focal_l2_loss --lambdas 1 1 0.1 0.01 0.01 --drop-amp-state --headnets hmp omp --include-jitter-offset --learning-rate 2.5e-5  --recount-epoch
 
 python -m torch.distributed.launch --nproc_per_node=2 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup  --weight-decay 0 --hmp-loss focal_l2_loss --sqrt-re --lambdas 1 0 10 100 0 --headnets hmp omp --include-jitter-offset --learning-rate 1.25e-4  --loader-workers 4
+
+
+# 使用人的boundbox的对角线长度对guiding offset做rescale
+python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --warmup --checkpoint-whole link2checkpoints_storage/PoseNet_190_epoch.pth --resume --weight-decay 0 --drop-optim-state --hmp-loss focal_l2_loss --lambdas 1 0 0 1000 0 --drop-amp-state --headnets hmp omp --learning-rate 1.25e-4
+
+python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --checkpoint-whole link2checkpoints_storage/PoseNet_35_epoch.pth --resume --weight-decay 0 --hmp-loss focal_l2_loss --offset-loss offset_instance_l1_loss --sqrt-re --lambdas 1 0 0 10000 0 --headnets hmp omp --learning-rate 1.25e-4 --fgamma 2 --drop-amp-state --drop-optim-state

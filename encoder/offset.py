@@ -3,7 +3,7 @@ import cv2
 import math
 import logging
 import torch
-from config.coco_data import COCO_PERSON_SKELETON
+from config.coco_data import COCO_PERSON_SKELETON, COCO_PERSON_SIGMAS
 
 LOG = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class OffsetMaps(object):
                                   self.fill_scale_size, self.min_jscale,
                                   self.skeleton)
 
-        offset_maps, scale_maps = omps.create_offsetmaps(anns, meta)
+        offset_maps, scale_maps, pscale_maps = omps.create_offsetmaps(anns, meta)
 
         mask_miss = cv2.resize(mask_miss, (0, 0),
                                fx=self.in_out_scale, fy=self.in_out_scale,
@@ -57,18 +57,20 @@ class OffsetMaps(object):
             return (
                 torch.from_numpy(offset_maps),
                 torch.from_numpy(scale_maps),
+                torch.from_numpy(pscale_maps), 
                 torch.from_numpy(mask_miss[None, ...])
             )
         else:
             return (
                 torch.from_numpy(offset_maps),
                 torch.tensor([]),
+                torch.from_numpy(pscale_maps),
                 torch.from_numpy(mask_miss[None, ...]),
             )
 
 
 class OffsetMapGenerator(object):
-    """Generate navigator offset and scale feature map of keypoints.
+    """Generate guiding offset, keypoint scale and person scale feature map of keypoints.
     """
 
     def __init__(self, input_size, stride, fill_scale_size, min_jscale, skeleton):
@@ -102,13 +104,14 @@ class OffsetMapGenerator(object):
 
         offset_maps = np.full((self.out_h, self.out_w, offset_num * 2), np.inf, dtype=np.float32)
         scale_maps = np.full((self.out_h, self.out_w, channel_num), np.nan, dtype=np.float32)
-        feature_maps = (offset_maps, scale_maps)
+        pscale_maps = np.full((self.out_h, self.out_w, offset_num * 2), 1.0, dtype=np.float32)
+        feature_maps = (offset_maps, scale_maps, pscale_maps)
 
         # ----------------------------------------------------------------------------------#
         # generate offset by sampling floating point positions in the original input resolution space
         self.put_connections(feature_maps, joints)
 
-        return offset_maps.transpose((2, 0, 1)), scale_maps.transpose((2, 0, 1))
+        return offset_maps.transpose((2, 0, 1)), scale_maps.transpose((2, 0, 1)), pscale_maps.transpose((2, 0, 1))
 
     def put_connections(self, feature_maps, joints):
 
@@ -144,6 +147,7 @@ class OffsetMapGenerator(object):
         # Thus, we can change the original storage in-place.
         offset_maps = feature_maps[0]
         scale_maps = feature_maps[1]
+        pscale_maps = feature_maps[2]
 
         for joint1, joint2 in zip(joints_fr, joints_to):
 
@@ -183,10 +187,12 @@ class OffsetMapGenerator(object):
             offset_patch = offset_maps[slice_y, slice_x, 2 * limb_id: 2 * limb_id + 2]
             vector_l = np.linalg.norm(offset_patch, axis=-1)
             scale_patch = scale_maps[slice_y, slice_x, fr]
+            pscale_patch = pscale_maps[slice_y, slice_x, 2 * limb_id: 2 * limb_id + 2]
 
             mask = offset_mesh_l < vector_l
 
             # overlap the offset values on the basis of the offset lengths
             offset_patch[mask] = offset_mesh[mask]
             scale_patch[mask] = joint1[3] if joint1[3] >= self.min_jscale else np.nan
+            pscale_patch[mask] = joint1[3] / COCO_PERSON_SIGMAS[fr]
 

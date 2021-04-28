@@ -113,6 +113,7 @@ class PostProcess(torch.nn.Module):
             jomps = (orgi_jomps + flip_jomps) / 2
 
         if cat_flip_offs:
+            LOG.info('concatenate the flipped offsets along the original offsets')
             # offset flip merge of increasing to 4D vector space, drop 0.5AP
             offs = offs.view((n, -1, 2, h, w))  # (2*N, limbs, 2, h, w)
             orig_offs = offs[:n // 2, ...]  # (N, limbs, 2, h, w)

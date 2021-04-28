@@ -206,6 +206,9 @@ if __name__ == '__main__':  # for debug
             offset = annos[1][0].numpy()
             offset[np.isinf(offset)] = 0
 
+            instance_scale = annos[1][2].numpy()
+            instance_scale[np.isinf(instance_scale)] = 0
+
             # # show the generated ground truth
             if show_image:
                 image = image.transpose((1, 2, 0))

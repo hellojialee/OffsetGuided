@@ -121,7 +121,7 @@ def main():
     if args.local_rank == 0:
         # build epoch recorder
         # os.makedirs(args.checkpoint_path, exist_ok=True)
-        with open(os.path.join(args.checkpoint_path, 'log'), 'a+') as f:
+        with open(os.path.join('./' + args.checkpoint_path, 'log'), 'a+') as f:
             f.write('\n\ncmd line: {} \n \targs dict: {}'.format(' '.join(sys.argv), vars(args)))
             f.flush()
 

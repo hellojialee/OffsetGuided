@@ -204,6 +204,7 @@ class LimbsCollect(object):
         len_limbs = torch.clamp((kps_xys_f - matched_kps_xys_t
                                  ).norm(dim=-1, keepdim=True), min=self.min_len)  # (N, L, K, 1)
         # Is torch.exp(-min_dist / kps_scales_t) more sensible? --No, this leads 0.5 AP drop
+        # How about change * torch.exp(-min_dist / len_limbs) to (-min_dist / len_limbs)? --No, 4 AP drop
         limb_scores = kps_scores_f * matched_kps_score_t * torch.exp(-min_dist / len_limbs)
         # len_limb may be 0, t = min_dist / (len_limbs + 1e-4)
 
