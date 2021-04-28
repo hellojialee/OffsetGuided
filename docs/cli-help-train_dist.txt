@@ -2,7 +2,7 @@
 usage: train_dist.py [-h] [--logging-output LOGGING_OUTPUT]
                      [--logging-stdout LOGGING_STDOUT]
                      [--logging-write LOGGING_WRITE] [--debug] [-q]
-                     [--shut-data-logging]
+                     [--shut-data-logging SHUT_DATA_LOGGING]
                      [--train-annotations TRAIN_ANNOTATIONS]
                      [--train-image-dir TRAIN_IMAGE_DIR]
                      [--val-annotations VAL_ANNOTATIONS]
@@ -14,6 +14,7 @@ usage: train_dist.py [-h] [--logging-output LOGGING_OUTPUT]
                      [--val-shuffle] [--square-length SQUARE_LENGTH]
                      [--flip-prob FLIP_PROB] [--max-rotate MAX_ROTATE]
                      [--min-scale MIN_SCALE] [--max-scale MAX_SCALE]
+                     [--min-stretch MIN_STRETCH] [--max-stretch MAX_STRETCH]
                      [--max-translate MAX_TRANSLATE] [--debug-affine-show]
                      [--initialize-whole INITIALIZE_WHOLE]
                      [--checkpoint-whole CHECKPOINT_WHOLE] [--basenet BASENET]
@@ -22,17 +23,21 @@ usage: train_dist.py [-h] [--logging-output LOGGING_OUTPUT]
                      [--headnets HEADNETS [HEADNETS ...]]
                      [--strides STRIDES [STRIDES ...]] [--max-stride {64,128}]
                      [--include-spread] [--include-background]
-                     [--include-scale] [--lambdas LAMBDAS [LAMBDAS ...]]
+                     [--include-jitter-offset] [--include-scale]
+                     [--lambdas LAMBDAS [LAMBDAS ...]]
                      [--stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]]
                      [--hmp-loss {l2_loss,focal_l2_loss}]
-                     [--offset-loss {offset_l1_loss,offset_laplace_loss}]
+                     [--jitter-offset-loss {offset_l1_loss,vector_l1_loss,offset_laplace_loss}]
+                     [--offset-loss {offset_l1_loss,vector_l1_loss,offset_laplace_loss,offset_instance_l1_loss}]
                      [--sqrt-re] [--scale-loss {scale_l1_loss}] [--ftao FTAO]
                      [--fgamma FGAMMA] [--lmargin LMARGIN]
                      [--gaussian-clip-thre GAUSSIAN_CLIP_THRE] [--sigma SIGMA]
+                     [--fill-jitter-size FILL_JITTER_SIZE]
                      [--fill-scale-size FILL_SCALE_SIZE]
-                     [--min_scale MIN_SCALE] [--resume] [--drop-optim-state]
-                     [--freeze] [--drop-layers] [--epochs N] [--recount-epoch]
-                     [--warmup] [--checkpoint-path CHECKPOINT_PATH]
+                     [--min_jscale MIN_JSCALE] [--resume] [--drop-optim-state]
+                     [--drop-amp-state] [--freeze] [--drop-layers]
+                     [--epochs N] [--recount-epoch] [--warmup]
+                     [--checkpoint-path CHECKPOINT_PATH]
                      [--max-grad-norm MAX_GRAD_NORM] [--local_rank LOCAL_RANK]
                      [--opt-level OPT_LEVEL] [--no-sync-bn]
                      [--keep-batchnorm-fp32 KEEP_BATCHNORM_FP32]
@@ -40,17 +45,20 @@ usage: train_dist.py [-h] [--logging-output LOGGING_OUTPUT]
                      [--print-freq N] [--optimizer {sgd,adam}]
                      [--learning-rate LR] [--momentum M] [--weight-decay W]
 
-Distributed training with Nvidia Apex
+Distributed training with Nvidia Apex; Follow
+https://github.com/NVIDIA/apex/blob/master/examples/imagenet/main_amp.py
 
 optional arguments:
   -h, --help            show this help message and exit
   --resume, -r          resume from checkpoint (default: False)
   --drop-optim-state    do not resume the optimizer from checkpoint. (default:
                         True)
+  --drop-amp-state      do not resume the apex apm statue from checkpoint.
+                        (default: True)
   --freeze              freeze the pre-trained layers of the BaseNet, i.e.
                         Backbone (default: False)
-  --drop-layers         drop some layers described in
-                        models.networks.load_model (default: False)
+  --drop-layers         drop some layers described in models/networks.py:58
+                        (default: False)
   --epochs N            number of epochs to train (default: 100)
   --recount-epoch       reset the epoch counter to 0 (default: False)
   --warmup              using warm-up learning rate (default: False)
@@ -72,8 +80,9 @@ logging:
                         write the detailed log into log file (default: True)
   --debug               print debug messages (default: False)
   -q, --quiet           only show warning messages or above (default: False)
-  --shut-data-logging   shut up the logging info during data preparing
-                        (default: False)
+  --shut-data-logging SHUT_DATA_LOGGING
+                        shut up the logging info during data preparing
+                        (default: True)
 
 dataset and loader:
   --train-annotations TRAIN_ANNOTATIONS
@@ -101,13 +110,23 @@ training parameters for warp affine:
   --flip-prob FLIP_PROB
                         the probability to flip the input image (default: 0.5)
   --max-rotate MAX_ROTATE
+                        upper bound of the image rotation during augmentation
+                        (default: 45)
   --min-scale MIN_SCALE
                         lower bound of the relative image scale during
-                        augmentation (default: 0.7)
+                        augmentation (default: 0.5)
   --max-scale MAX_SCALE
+                        upper bound of the relative image scale during
+                        augmentation (default: 2.0)
+  --min-stretch MIN_STRETCH
+                        lower bound of the relative image length stretch
+                        during augmentation (default: 0.95)
+  --max-stretch MAX_STRETCH
+                        upper bound of the relative image length stretch
+                        during augmentation (default: 1.05)
   --max-translate MAX_TRANSLATE
                         upper bound of shitting the image during augmentation
-                        (default: 50)
+                        (default: 150)
   --debug-affine-show   show the transformed image and keyooints (default:
                         False)
 
@@ -116,7 +135,7 @@ model configuration:
                         randomly initialize the basenet and headnets, just set
                         it to True if you are not certain (default: True)
   --checkpoint-whole CHECKPOINT_WHOLE
-                        the checkpoint pach to the whole model
+                        the checkpoint path to the whole model
                         (basenet+headnets) (default: None)
 
 base network configuration:
@@ -139,25 +158,32 @@ head network configuration:
   --max-stride {64,128}
                         the max down-sampling stride through the network.
                         (default: 128)
-  --include-spread      add conv layers to regress the spread_b of Laplace
-                        distribution, you should set it to True if you chose
-                        laplace loss (default: False)
-  --include-background  include the heatmap of background channel (default:
-                        False)
-  --include-scale       add cone layers to regress the keypoint scales in
+  --include-spread      add conv layers into the headnet to regress the
+                        spread_b of Laplace distribution, you should set it to
+                        True if you want to use laplace loss (default: False)
+  --include-background  add conve layers to regress the heatmap of background
+                        channel (default: False)
+  --include-jitter-offset
+                        add conve layers to regress the jitter refinement
+                        offset to the nearest keypoint (default: False)
+  --include-scale       add conve layers to regress the keypoint scales in
                         separate channels (default: False)
 
 loss configuration:
   --lambdas LAMBDAS [LAMBDAS ...]
                         learning task scaling factors for hmp_loss,
-                        bg_hmp_loss, offset_loss and scale_loss, directly
-                        multiplied, not averaged (default: [1, 1, 0.01, 1])
+                        bg_hmp_loss, jitter_off_loss, offset_loss and
+                        scale_loss, directly multiplied, not averaged
+                        (default: [1, 1, 100, 100, 0.01])
   --stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]
                         loss weights for different stacks, weighted-sum
                         averaged (default: [1, 1])
   --hmp-loss {l2_loss,focal_l2_loss}
                         loss for heatmap regression (default: focal_l2_loss)
-  --offset-loss {offset_l1_loss,offset_laplace_loss}
+  --jitter-offset-loss {offset_l1_loss,vector_l1_loss,offset_laplace_loss}
+                        loss for jitter offeset regression (default:
+                        offset_l1_loss)
+  --offset-loss {offset_l1_loss,vector_l1_loss,offset_laplace_loss,offset_instance_l1_loss}
                         loss for offeset regression (default: offset_l1_loss)
   --sqrt-re             rescale the offset loss using torch.sqrt (default:
                         False)
@@ -169,21 +195,25 @@ loss configuration:
   --fgamma FGAMMA       order of scaling factor in focal L2 loss during
                         training (default: 1)
   --lmargin LMARGIN     offset length below this value will not be punished
-                        during training (default: 0.1)
+                        during training when we rescale the offset loss by
+                        sqrt operation (default: 1e-05)
 
 heatmap encoder:
   --gaussian-clip-thre GAUSSIAN_CLIP_THRE
                         Gaussian distribution below this value is cut to zero
                         (default: 0.01)
   --sigma SIGMA         standard deviation of Gaussian distribution (default:
-                        9)
+                        7)
+  --fill-jitter-size FILL_JITTER_SIZE
+                        the area to the nearest keypoint are fille with the
+                        jitter refinement offset (default: 3)
 
 offsetmap and scalemap encoder:
   --fill-scale-size FILL_SCALE_SIZE
-                        the area around the keypoint will be filled with joint
-                        scale values. (default: 10)
-  --min_scale MIN_SCALE
-                        set minimum keypoint scale (default: 1)
+                        the area around the keypoint are filled with joint
+                        scale values and offset. (default: 7)
+  --min_jscale MIN_JSCALE
+                        set minimum keypoint scale (default: 1.0)
 
 apex configuration:
   --local_rank LOCAL_RANK
@@ -197,13 +227,14 @@ apex configuration:
                         'choices': None, 'required': False, 'help': 'channel
                         last may lead to 22% speed up', 'metavar': None,
                         'container': <argparse._ArgumentGroup object at
-                        0x7fb5bc964240>, 'prog': 'train_dist.py'}peed up
+                        0x7fd0320b57f0>, 'prog': 'train_dist.py'}peed up
                         (default: False)
   --print-freq N, -f N  print frequency (default: 10) (default: 10)
 
 optimizer configuration:
   --optimizer {sgd,adam}
-  --learning-rate LR    learning rate (default: 0.00025)
+  --learning-rate LR    learning rate in 1 world size, thus, the actual LR
+                        will learning_rate * world_size (default: 0.00025)
   --momentum M          momentum for sgd (default: 0.9)
   --weight-decay W, --wd W
                         weight decay (e.g. 1e-4) (default: 0)

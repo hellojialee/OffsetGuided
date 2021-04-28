@@ -1,6 +1,6 @@
 # SimplePose V2
 
-Code and pre-trained models for our paper,"greedy offset-guided keypoint grouping for human pose estimation" 
+Source code and pre-trained models for our paper, "**greedy offset-guided keypoint grouping for human pose estimation**" 
 
 
 
