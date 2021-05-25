@@ -7,6 +7,7 @@ LOG = logging.getLogger(__name__)
 TAU = 0.01  # threshold between fore/background in focal L2 loss during training
 GAMMA = 1  # order of scaling factor in focal L2 loss during training
 MARGIN = 1e-5  # 0.1  # offset length below this value will not be punished
+MARGIN2 = 0.1  #
 
 
 def l1(x, t):
@@ -183,7 +184,7 @@ class HeatMapsLoss(object):
                 inter3 = self.jomp_loss(jomp, gt_jomp, None, None, mask_miss)  # type: torch.Tensor
                 inter3 = inter3[inter3 >= MARGIN]  # ignore jitter offset loss below MARGIN
                 if self.sqrt_re:   # normalized by sqrt as well as the valid offset areas
-                    inter3 = torch.sqrt(inter3)
+                    inter3 = torch.sqrt(inter3)  # tensor([]).sum() = 0
                 weighted_offloss = torch.mul(inter3.sum() / (1 + float(inter3.numel())), self.stack_weights[stack_i])
                 out3.append(weighted_offloss)
         LOG.debug('hmp loss at each stack: %s, \t background hmp loss at eack stack: %s'
@@ -242,11 +243,16 @@ class OffsetMapsLoss(object):
 
             if len(pred_s) > 0:
                 inter2 = self.s_loss(pred_s, gt_s, mask_miss)  # type: torch.Tensor
+                inter2 = inter2[inter2 >= MARGIN2]
+                if self.sqrt_re:
+                    inter2 = torch.sqrt(inter2)
                 # normalized by the valid scale label areas
                 weighted_sloss = torch.mul(inter2.sum() / (1 + float(inter2.numel())), self.stack_weights[stack_i])
                 out2.append(weighted_sloss)
         LOG.debug('connection offset loss at each stack: %s, \t keypoint scale loss at each stack: %s'
                   , torch.tensor(out1).cpu().numpy().tolist(), torch.tensor(out2).cpu().numpy().tolist())
+
+        # off_loss, scale_loss
         return sum(out1) / batch_size, sum(out2) / batch_size
 
 

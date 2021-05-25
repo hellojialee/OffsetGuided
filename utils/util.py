@@ -44,13 +44,13 @@ def adjust_learning_rate(learning_rate, world_size, optimizer,
             lr = lr * float(1 + step + epoch * len_epoch) / (
                     15. * len_epoch)  # len_epoch=len(train_loader)
 
-    if 35 <= epoch < 55:
+    if 78 <= epoch < 92:
         lr = learning_rate * world_size
 
-    if 57 <= epoch < 77:
+    if 92 <= epoch < 105:
         lr = 0.1 * learning_rate * world_size
 
-    if 77 <= epoch < 85:
+    if 105 <= epoch < 110:
         lr = 0.01 * learning_rate * world_size
 
     # if(args.local_rank == 0):

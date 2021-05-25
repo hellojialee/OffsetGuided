@@ -188,6 +188,7 @@ class GreedyGroup(object):
     def _delete_sort(subset, thre, index):  # todo: how about index=4? use limb_score to sort
         """
         Delete and sort the detected poses according to scores.
+        Copied from openpifpaf (CVPR 2019).
 
         Args:
             subset (list): detected results of shape [M * [ 17 * [x, y, v, s, limb_score, ind]]]
