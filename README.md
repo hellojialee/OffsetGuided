@@ -59,7 +59,7 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 #### Run
 
 ```
-python -u /home/jia/Desktop/OffsetGuided/evaluate.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_77_epoch.pth --resume --sqrt-re --batch-size 8 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset val --flip-test --thre-hmp 0.04 --person-thre 0.04
+python evaluate.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_77_epoch.pth --resume --sqrt-re --batch-size 8 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset val --flip-test --thre-hmp 0.04 --person-thre 0.04
 ```
 
 > Hint: if you want to achieve a higher speed (30+ FPS on a 2080 TI), **do not** use `--flip-test`
@@ -82,7 +82,7 @@ python -u /home/jia/Desktop/OffsetGuided/evaluate.py --no-pretrain --initialize-
 #### Run
 
 ```
-python -u /home/jia/Desktop/OffsetGuided/evaluate.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_77_epoch.pth --resume --sqrt-re --batch-size 8 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset test-dev --flip-test --thre-hmp 0.04 --person-thre 0.04
+python evaluate.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_77_epoch.pth --resume --sqrt-re --batch-size 8 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset test-dev --flip-test --thre-hmp 0.04 --person-thre 0.04
 ```
 
 > Hint: if you want to achieve a higher speed (30+ FPS on a 2080 TI), **do not** use `--flip-test`
@@ -107,7 +107,7 @@ python -u /home/jia/Desktop/OffsetGuided/evaluate.py --no-pretrain --initialize-
 #### COCO test-dev dataset
 
 ```
-python /home/jia/Desktop/OffsetGuided/evaluate.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_77_epoch.pth --resume --sqrt-re --batch-size 8 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset test-dev --flip-test --fixed-height --thre-hmp 0.04 --person-thre 0.04
+python evaluate.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_77_epoch.pth --resume --sqrt-re --batch-size 8 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset test-dev --flip-test --fixed-height --thre-hmp 0.04 --person-thre 0.04
 ```
 
 ```
