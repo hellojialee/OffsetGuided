@@ -10,7 +10,7 @@ Source code and pre-trained models for our paper, "**Greedy Offset-Guided Keypoi
 
 Guiding offsets greedily “connect” the adjacent keypoints belonging to the same persons
 
-![guidding offsets](docs/guidding offsets.png)
+![guidding offsets](docs/guidding_offsets.png)
 
 ### Overview of the proposed approach
 
