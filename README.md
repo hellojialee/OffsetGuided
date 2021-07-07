@@ -14,11 +14,11 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 
 ### Overview of the proposed approach
 
-(a): Responses of “left shoulder”     (b): Responses of “left hip”
+(a): Responses of “left shoulder”    		     (b): Responses of “left hip”
 
-(c): Guiding offsets from “left shoulder” to “left hip”     (d): Candidate keypoints and limbs
+(c): Guiding offsets from “left shoulder” to “left hip”   	  (d): Candidate keypoints and limbs
 
-(e): Greedy keypoint grouping        (f): Final result
+(e): Greedy keypoint grouping           		   (f): Final result
 
 ![pipeline](docs/pipeline.png)
 
@@ -44,7 +44,7 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 
 2. Download the COCO dataset.
 
-3. Download the pre-trained models via: [GoogleDrive](to be fix) [x]
+3. Download the pre-trained models via: [GoogleDrive](https://drive.google.com/drive/folders/1jG87NBm_wXKgKJh-VLkVkJTIV7vyiz1P?usp=sharing)
 
 4. Change the paths in the code according to your environment.
 
@@ -52,7 +52,7 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 
 
 
-## Evaluation
+## Evaluation (single-scale input)
 
 ### Set the long side of the input image to 640
 
