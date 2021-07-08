@@ -1,7 +1,7 @@
 # SimplePose V2
 
-Source code and pre-trained models for our paper, "**Greedy Offset-Guided Keypoint Grouping for Human Pose Estimation**" 
 
+Source code and pre-trained models for "**Greedy Offset-Guided Keypoint Grouping for Human Pose Estimation**" ([Paper Link](https://arxiv.org/abs/2107.03098))
 
 
 ## Introduction
@@ -48,7 +48,7 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 
 4. Change the paths in the code according to your environment.
 
-5. Refer to the docs `cli-help-evaluate.txt`,`cli-help-train_dist.txt` to know the hypter-parameter settings and more info.
+5. Refer to the docs `cli-help-evaluate.txt`,`cli-help-train_dist.txt` to know the hypter-parameter settings and more info of this project.
 
 
 
@@ -129,7 +129,7 @@ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.656
 
 In our paper, we fine-tune the pre-trained model `multi_pose_hg_3x.pth` in [CenterNet](https://github.com/xingyizhou/CenterNet)
 
-For simplicity, you can employ our pre-trained models (i.e., training from a checkpoint).
+For simplicity, you can employ our pre-trained models (i.e., training from a checkpoint in [GoogleDrive](https://drive.google.com/drive/folders/1jG87NBm_wXKgKJh-VLkVkJTIV7vyiz1P?usp=sharing)).
 
 **Run example:**
 
@@ -147,9 +147,18 @@ We refer and borrow some code from [SimplePose](https://github.com/hellojialee/I
 
 ## Citation
 
-Please kindly cite the following corresponding papers in your publications if it helps your research:
+If this work help your research, please cite the corresponding paper:
 
 ```
+@misc{li2021greedy,
+      title={Greedy Offset-Guided Keypoint Grouping for Human Pose Estimation}, 
+      author={Jia Li and Linhua Xiang and Jiwei Chen and Zengfu Wang},
+      year={2021},
+      eprint={2107.03098},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
+
 @inproceedings{li2020simple,
   title={Simple pose: Rethinking and improving a bottom-up approach for multi-person pose estimation},
   author={Li, Jia and Su, Wen and Wang, Zengfu},
