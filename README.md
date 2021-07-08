@@ -6,9 +6,9 @@ Source code and pre-trained models for "**Greedy Offset-Guided Keypoint Grouping
 
 ## Introduction
 
-### A bottom-up approach for the problem of multi-person pose estimation.
+### A bottom-up approach for the problem of multi-person pose estimation
 
-Guiding offsets greedily “connect” the adjacent keypoints belonging to the same persons
+Guiding offsets greedily “connect” the adjacent keypoints belonging to the same persons.
 
 ![guidding offsets](docs/guidding_offsets.png)
 
@@ -38,13 +38,13 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 
 ## Prepare
 
-1. Install packages according to `requirement.txt`:
+1. Install packages according to `requirement.txt`.
 
    Python=3.6, Pytorch>1.0, Nvidia Apex and other packages needed.
 
 2. Download the COCO dataset.
 
-3. Download the pre-trained models via: [GoogleDrive](https://drive.google.com/drive/folders/1jG87NBm_wXKgKJh-VLkVkJTIV7vyiz1P?usp=sharing)
+3. Download the pre-trained models via: [GoogleDrive](https://drive.google.com/drive/folders/1jG87NBm_wXKgKJh-VLkVkJTIV7vyiz1P?usp=sharing).
 
 4. Change the paths in the code according to your environment.
 
@@ -127,9 +127,7 @@ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.656
 
 ## Training
 
-In our paper, we fine-tune the pre-trained model `multi_pose_hg_3x.pth` in [CenterNet](https://github.com/xingyizhou/CenterNet)
-
-For simplicity, you can employ our pre-trained models (i.e., training from a checkpoint in [GoogleDrive](https://drive.google.com/drive/folders/1jG87NBm_wXKgKJh-VLkVkJTIV7vyiz1P?usp=sharing)).
+In our paper, we fine-tune the pre-trained model `multi_pose_hg_3x.pth` in [CenterNet](https://github.com/xingyizhou/CenterNet). For simplicity, you can employ our pre-trained models (i.e., training from a checkpoint in [GoogleDrive](https://drive.google.com/drive/folders/1jG87NBm_wXKgKJh-VLkVkJTIV7vyiz1P?usp=sharing)).
 
 **Run example:**
 
