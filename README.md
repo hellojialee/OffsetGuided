@@ -1,7 +1,8 @@
 # SimplePose V2
 
-
 Source code and pre-trained models for "**Greedy Offset-Guided Keypoint Grouping for Human Pose Estimation**" ([Paper Link](https://arxiv.org/abs/2107.03098))
+
+Earlier project: [SimplePose](https://github.com/hellojialee/Improved-Body-Parts)
 
 
 ## Introduction
