@@ -32,7 +32,7 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 ## Project Features
 
 - Implement the models using Pytorch in auto mixed-precision (using Nvidia Apex).
-- Supprot training on multiple GPUs (over 90% GPU usage rate on each GPU card).
+- Support training on multiple GPUs (over 90% GPU usage rate on each GPU card).
 - Fast data preparing and augmentation during training.
 - Focal L2 loss for keypoint heatmap regression.
 - L1 loss for guiding offset regression.
