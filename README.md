@@ -140,7 +140,7 @@ python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-ch
 
 ## Acknowledgement
 
-We refer and borrow some code from [SimplePose](https://github.com/hellojialee/Improved-Body-Parts), [OpenPifPaf](https://github.com/openpifpaf/openpifpaf), [CenterNet](https://github.com/xingyizhou/CenterNet), etc.
+We refer to and borrow some code from [SimplePose](https://github.com/hellojialee/Improved-Body-Parts), [OpenPifPaf](https://github.com/openpifpaf/openpifpaf), [CenterNet](https://github.com/xingyizhou/CenterNet), etc.
 
 
 
@@ -149,13 +149,11 @@ We refer and borrow some code from [SimplePose](https://github.com/hellojialee/I
 If this work help your research, please cite the corresponding paper:
 
 ```
-@misc{li2021greedy,
-      title={Greedy Offset-Guided Keypoint Grouping for Human Pose Estimation}, 
-      author={Jia Li and Linhua Xiang and Jiwei Chen and Zengfu Wang},
-      year={2021},
-      eprint={2107.03098},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
+@article{li2021greedy,
+  title={Greedy Offset-Guided Keypoint Grouping for Human Pose Estimation},
+  author={Li, Jia and Xiang, Linhua and Chen, Jiwei and Wang, Zengfu},
+  journal={arXiv preprint arXiv:2107.03098},
+  year={2021}
 }
 
 @inproceedings{li2020simple,
