@@ -1,6 +1,7 @@
 import logging
 import torch
 from models import heads, networks, losses
+from lib.models import try_pose_hrnet
 from utils.util import boolean_string
 import argparse
 
@@ -17,7 +18,7 @@ def net_cli(parser):
 
     group = parser.add_argument_group('base network configuration')
     group.add_argument('--basenet', default='hourglass104',
-                       help='base network, e.g. hourglass4stage')
+                       help='base network, e.g. hrnet, hourglass104, hourglass4stage')
     group.add_argument('--two-scale', default=False, action='store_true',
                        help='to be implemented')
     group.add_argument('--multi-scale', default=False, action='store_true',
@@ -34,7 +35,7 @@ def net_cli(parser):
                        help='rations of the input to the output of basenet, '
                             'also the strides of all sub headnets. '
                             'Also, they determin the strides in encoder and decoder')
-    group.add_argument('--max-stride', default=128, type=int, choices=[64, 128],
+    group.add_argument('--max-stride', default=128, type=int, choices=[32, 64, 128],
                        help='the max down-sampling stride through the network. ')
     group.add_argument('--include-spread', default=False, action='store_true',
                        help='add conv layers into the headnet to regress the spread_b '
@@ -90,39 +91,39 @@ def model_factory(args):
         basenet, n_stacks, stride, max_stride, feature_dim = hourglass_from_scratch(
             args.basenet, args.pretrained, args.basenet_checkpoint, args.initialize_whole)
 
+    if 'hrnet' in args.basenet:
+        basenet, n_stacks, stride, max_stride, feature_dim = hrnet_from_scratch(
+            args.basenet, args.pretrained, args.basenet_checkpoint, args.initialize_whole)
+
         # build the head networks
-        assert stride == args.strides[0], 'strides mismatch'
-        assert max_stride == args.max_stride, 'please reset the max_stride based on the network manually'
-        headnets = heads.headnets_factory(
-            args.headnets,
-            n_stacks,
-            args.strides,
-            feature_dim,
-            args.include_spread,
-            args.include_background,
-            args.include_jitter_offset,
-            args.include_scale)
-        # no pre-trained headnets, so we randomly initialize them
-        if args.initialize_whole:
-            headnets = [networks.initialize_weights(h) for h in headnets]
+    assert stride == args.strides[0], 'strides mismatch'
+    assert max_stride == args.max_stride, 'please reset the max_stride based on the network manually'
+    headnets = heads.headnets_factory(
+        args.headnets,
+        n_stacks,
+        args.strides,
+        feature_dim,
+        args.include_spread,
+        args.include_background,
+        args.include_jitter_offset,
+        args.include_scale)
+    # no pre-trained headnets, so we randomly initialize them
+    if args.initialize_whole:  # initialize headnets
+        headnets = [networks.initialize_weights(h) for h in headnets]
 
-        lossfuncs = losses.lossfuncs_factory(
-            args.headnets,
-            n_stacks,
-            args.stack_weights,
-            args.hmp_loss,
-            args.jitter_offset_loss,
-            args.offset_loss,
-            args.scale_loss,
-            args.sqrt_re)
+    lossfuncs = losses.lossfuncs_factory(
+        args.headnets,
+        n_stacks,
+        args.stack_weights,
+        args.hmp_loss,
+        args.jitter_offset_loss,
+        args.offset_loss,
+        args.scale_loss,
+        args.sqrt_re)
 
-        model = networks.NetworkWrapper(basenet, headnets)
+    model = networks.NetworkWrapper(basenet, headnets)
 
-        return model, lossfuncs
-
-    # if 'merge_hourglass' in args.basenet: implement other network structures
-
-    raise Exception(f'unknown base network: {args.base_name}')
+    return model, lossfuncs
 
 
 def hourglass_from_scratch(base_name, pretrained, basenet_checkpoint, initialize_whole):
@@ -139,6 +140,23 @@ def hourglass_from_scratch(base_name, pretrained, basenet_checkpoint, initialize
     LOG.info('select %s as the backbone, n_stacks=%d, stride=%d, max_stride=%d, feature_channels=%d',
              basenet.__class__.__name__, n_stacks, stride, max_stride, feature_channel)
     return basenet, n_stacks, stride, max_stride, feature_channel
+
+
+def hrnet_from_scratch(base_name, pretrained, basenet_checkpoint, initialize_whole):
+    if 'hrnet48' in base_name:
+        model = try_pose_hrnet.build_hrnet(48, init_w=initialize_whole, load_pretrain=pretrained)
+        n_stacks = 1
+        stride = 4
+        max_stride = 32
+        feature_channel = 48
+
+        LOG.info('select %s as the backbone, n_stacks=%d, stride=%d, max_stride=%d, feature_channels=%d',
+                 base_name, n_stacks, stride, max_stride, feature_channel)
+
+        # HRNet48 flops, params: 83.947G 63.595M
+        return model, n_stacks, stride, max_stride, feature_channel
+
+    raise Exception(f'unknown base network: {args.base_name}')
 
 
 def debug_parse_args():

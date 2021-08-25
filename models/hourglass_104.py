@@ -427,7 +427,10 @@ if __name__ == '__main__':
     # flops, params = clever_format([flops, params], "%.3f")
     # print(flops, params)
     # ---------------------------------------- #
+    # Flops, Params
     # Hourglass_104 234.511G 187.700M
     # Ours 4-stage IMHN 269.882G, 128.999M
     # Ours 3-stage IMHN 206.546G, 96.676M
+    # HRNet48 83.947G 63.595M
+
     # ---------------------------------------- #

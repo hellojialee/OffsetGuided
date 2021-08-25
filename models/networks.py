@@ -5,6 +5,7 @@ import sys
 import torch
 import torch.nn as nn
 from models import Hourglass104, Hourglass4Stage
+from lib.models import try_pose_hrnet
 
 LOG = logging.getLogger(__name__)
 
@@ -222,4 +223,4 @@ def basenet_factory(basenet_name):
 
         net_opt = IMHNOpt()
         out_dim = 50
-        raise Exception('unknown base network in {}'.format(basenet_name))
+    raise Exception('unknown base network in {}'.format(basenet_name))

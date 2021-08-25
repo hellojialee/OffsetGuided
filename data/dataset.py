@@ -54,7 +54,7 @@ class CocoKeypoints(torch.utils.data.Dataset):
         if n_images:
             self.ids = self.ids[:n_images]
         print(f'Path to annotation file: {annFile}')
-        print('Evaluation Image Numbers: {}'.format(len(self.ids)))
+        print('Valid Image Numbers: {}'.format(len(self.ids)))
 
         if shuffle:
             random.shuffle(self.ids)  # shuffle in place

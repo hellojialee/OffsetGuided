@@ -30,6 +30,10 @@ except ImportError:
         "Please install apex from https://www.github.com/nvidia/apex to run this example.")
 
 # os.environ['CUDA_VISIBLE_DEVICES'] = "1, 2"
+import warnings
+
+warnings.filterwarnings('ignore')
+
 LOG = logging.getLogger(__name__)
 
 
@@ -314,7 +318,7 @@ def train(train_loader, train_sampler, model, criterion, optimizer, epoch):
             multi_losses += list(lossfun(out, *anno))
         # weight the multi-task losses, args.lambdas defined in models.factory
         assert len(multi_losses) <= len(args.lambdas), 'lambdas is incomplete'
-        weighted_losses = [torch.mul(lam, l) for lam, l in
+        weighted_losses = [torch.mul(lam, l).float() for lam, l in
                            zip(args.lambdas, multi_losses)]
         LOG.debug('weighted losses: %s', torch.tensor(weighted_losses).cpu().numpy().tolist())
         loss = sum(weighted_losses)  # type: torch.Tensor
@@ -410,7 +414,7 @@ def test(val_loader, val_sampler, model, criterion, optimizer, epoch):
             for out, lossfun, anno in zip(outputs, criterion, anno_heads):
                 multi_losses += list(lossfun(out, *anno))
             # weight the multi-task losses
-            weighted_losses = [torch.mul(lam, l) for lam, l in
+            weighted_losses = [torch.mul(lam, l).float() for lam, l in
                                zip(args.lambdas, multi_losses)]
             loss = sum(weighted_losses)  # args.lambdas defined in models.factory
 

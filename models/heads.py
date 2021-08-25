@@ -169,6 +169,7 @@ def factory_head(head_name, n_stacks, stride, inp_dim,
     Build a head network.
 
     Args:
+        inp_dim: input channel number of the extracted feature output by the basenet
         include_spread (bool): regress the spread b of Laplace distribution
     """
     if head_name in ('hmp',
