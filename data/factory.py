@@ -7,17 +7,10 @@ import torchvision
 
 import transforms
 from data import CocoKeypoints
+from config.coco_data import (ANNOTATIONS_TRAIN, ANNOTATIONS_VAL, IMAGE_DIR_TRAIN, IMAGE_DIR_VAL,
+                              ANNOTATIONS_TESTDEV, ANNOTATIONS_TEST, IMAGE_DIR_TEST)
 
 LOG = logging.getLogger(__name__)
-
-ANNOTATIONS_TRAIN = 'data/link2COCO2017/annotations/person_keypoints_train2017.json'
-ANNOTATIONS_VAL = 'data/link2COCO2017/annotations/person_keypoints_val2017.json'
-IMAGE_DIR_TRAIN = 'data/link2COCO2017/train2017'
-IMAGE_DIR_VAL = 'data/link2COCO2017/val2017'
-
-ANNOTATIONS_TESTDEV = 'data/link2COCO2017/annotations_trainval_info/image_info_test-dev2017.json'
-ANNOTATIONS_TEST = 'data/link2COCO2017/annotations_trainval_info/image_info_test2017.json'
-IMAGE_DIR_TEST = 'data/link2COCO2017/test2017/'
 
 
 def collate_images_anns_meta(batch):
@@ -275,7 +268,8 @@ if __name__ == '__main__':  # for debug
     val_client = CocoKeypoints(IMAGE_DIR_VAL, ANNOTATIONS_VAL,
                                preprocess=preprocess,
                                target_transforms=target_transform,
-                               n_images=1000, shuffle=True)
+                               n_images=1000, shuffle=True,
+                               debug_mask=True)
 
     # test the data generator
     print(timeit.timeit(stmt='test_augmentation_speed(val_client, True)',  # True

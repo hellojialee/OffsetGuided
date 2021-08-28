@@ -3,6 +3,7 @@
 import logging
 import torch
 import re
+from config.coco_data import COCO_KEYPOINTS,  COCO_PERSON_SKELETON
 
 LOG = logging.getLogger(__name__)
 
@@ -185,7 +186,7 @@ def factory_head(head_name, n_stacks, stride, inp_dim,
             assert n_keypoints == 17, f'{n_keypoints} keypoint not supported'
 
         else:
-            n_keypoints = 17
+            n_keypoints = len(COCO_KEYPOINTS)
 
         LOG.info('select HeatMapsHead of stride %d to infer %d keypoint', stride, n_keypoints)
         HeatMapsHead.stride = stride
@@ -210,7 +211,7 @@ def factory_head(head_name, n_stacks, stride, inp_dim,
                 19, 16, 31, 44, 25], 'check skeleton configuration'
 
         else:
-            n_skeleton = 19
+            n_skeleton = len(COCO_PERSON_SKELETON)
 
         LOG.info('select OffsetMapsHead of stride %d to infer %d skeleton connections',
                  stride, n_skeleton)

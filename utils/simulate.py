@@ -22,16 +22,6 @@ import encoder
 import decoder
 from utils.util import AverageMeter
 
-try:
-    from apex.parallel import DistributedDataParallel as DDP
-    from apex.fp16_utils import *
-    from apex import amp
-    import apex.optimizers as apex_optim
-    from apex.multi_tensor_apply import multi_tensor_applier
-except ImportError:
-    raise ImportError(
-        "Please install apex from https://www.github.com/nvidia/apex to run this example.")
-
 LOG = logging.getLogger(__name__)
 
 

@@ -56,7 +56,7 @@ class NormalizeAnnotations(Preprocess):
 
             # actually small objects (segment area < 32^2) in COCO do not contain keypoint annotations,
             # thus you can just remove these two line codes
-            if ann['area'] <= 32 * 32:
+            if 'area' in ann and ann['area'] <= 32 * 32:
                 keypoints[i, :, 2] = 0
         # print('ground truth \n', keypoints)
 

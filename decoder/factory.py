@@ -204,7 +204,7 @@ def parse_heads(head_name, stride):
             assert n_keypoints == 17, f'{n_keypoints} keypoints not supported'
 
         else:
-            n_keypoints = 17
+            n_keypoints = len(COCO_KEYPOINTS)
             keypoints = COCO_KEYPOINTS
         return {'keypoints': keypoints, 'hmp_stride': stride}  # keypoint definition in dataset
 

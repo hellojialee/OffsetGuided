@@ -106,7 +106,12 @@ class CocoKeypoints(torch.utils.data.Dataset):
         # We use RGB image sequence all through our project.
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         # mask_miss areas: 0, mask_all areas: 255
-        mask_miss, _ = self.mask_mask(image_info, anns, debug_show=self.debug_mask)
+
+        # Compatibility for CrowdPose and COCO dataset, since no segmentation mask in CrowPose
+        if 'segmentation' in anns[0]:
+            mask_miss, _ = self.mask_mask(image_info, anns, debug_show=self.debug_mask)
+        else:
+            mask_miss = self.get_mask(image_info, debug_show=self.debug_mask)
 
         meta_init = {
             'dataset_index': index,
@@ -195,6 +200,23 @@ class CocoKeypoints(torch.utils.data.Dataset):
                       mask_miss.min(), mask_miss.max())
 
         return mask_miss, mask_all
+
+    def get_mask(self, image_info, debug_show=False):
+        """Compatibility for CrowdPose dataset.
+        mask_miss area noted by 0"""
+        h = image_info['height']
+        w = image_info['width']
+        mask_miss = np.ones((h, w), dtype=np.uint8)
+
+        mask_miss = mask_miss.astype(np.uint8)
+        mask_miss *= 255  # min=0, max=255
+
+        if debug_show:
+            plt.imshow(np.repeat(mask_miss[:, :, np.newaxis], 3, axis=2))
+            plt.show()
+            LOG.debug('Always produce mask_miss filled with 255')
+
+        return mask_miss
 
 
 class ImageList(torch.utils.data.Dataset):

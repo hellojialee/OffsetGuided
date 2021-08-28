@@ -11,8 +11,8 @@ import numpy as np
 import json
 import torch
 import torchvision
-from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
+from xtcocotools.coco import COCO
+from xtcocotools.cocoeval import COCOeval
 import config
 import data
 import transforms
@@ -23,7 +23,7 @@ import decoder
 from utils.util import AverageMeter
 
 from config.coco_data import (ANNOTATIONS_TRAIN, ANNOTATIONS_VAL, IMAGE_DIR_TRAIN, IMAGE_DIR_VAL,
-                              ANNOTATIONS_TESTDEV, ANNOTATIONS_TEST, IMAGE_DIR_TEST)
+                              ANNOTATIONS_TESTDEV, ANNOTATIONS_TEST, IMAGE_DIR_TEST, COCO_KEYPOINTS)
 
 try:
     from apex.parallel import DistributedDataParallel as DDP
@@ -238,7 +238,7 @@ def run_images():
                     keypoints_list += [
                         xyv[0], xyv[1], 1 if xyv[0] > 0 or xyv[1] > 0 else 0
                     ]
-
+                print(keypoints_list)
                 result_keypoints.append({
                     'image_id': image_id,
                     'category_id': 1,  # person category
@@ -254,7 +254,7 @@ def run_images():
                 result_keypoints.append({
                     'image_id': image_id,
                     'category_id': 1,
-                    'keypoints': np.zeros((17 * 3,)).tolist(),
+                    'keypoints': np.zeros((len(COCO_KEYPOINTS) * 3,)).tolist(),
                     'score': 0.01,
                 })
 
@@ -270,7 +270,7 @@ def run_images():
                 # color_connections=True, linewidth=5,
             )
             with show.image_canvas(rgb_img,
-                                   # output_path + '.keypoints.png',
+                                    'hehkeypoints.png',
                                    show=True,
                                    # fig_width=args.figure_width,
                                    # dpi_factor=args.dpi_factor
@@ -313,8 +313,12 @@ def validation(annFile, dump_name, dataset):
     json.dump(results_keypoints, open(resFile, 'w'))
 
     # ####################  COCO Evaluation ################
+    sigmas = np.array([
+        .79, .79, .72, .72, .62, .62, 1.07, 1.07, .87, .87, .89, .89, .79,
+        .79
+    ]) / 10.0
     cocoDt = cocoGt.loadRes(resFile)
-    cocoEval = COCOeval(cocoGt, cocoDt, iouType='keypoints')
+    cocoEval = COCOeval(cocoGt, cocoDt, 'keypoints_crowd', sigmas, use_area=False)
     cocoEval.params.imgIds = validation_ids  # only part of the person images are evaluated
     cocoEval.evaluate()
     cocoEval.accumulate()

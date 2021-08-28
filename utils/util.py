@@ -26,28 +26,33 @@ class AverageMeter(object):
 
 def adjust_learning_rate(learning_rate, world_size, optimizer,
                          epoch, step, len_epoch, use_warmup=False):
-    factor = epoch // 15
+    # factor = epoch // 15
+    #
+    # lr = learning_rate * world_size * (0.2 ** factor)
 
-    lr = learning_rate * world_size * (0.2 ** factor)
+    lr = learning_rate * world_size
 
     """Warmup the learning rate"""
     if use_warmup:
-        if epoch < 5:
+        if epoch < 15:
             # print('=============>  Using warm-up learning rate....')
             lr = lr * float(1 + step + epoch * len_epoch) / (
-                    5. * len_epoch)  # len_epoch=len(train_loader)
+                    15. * len_epoch)  # len_epoch=len(train_loader)
 
-    # if 24 <= epoch < 120:
-    #     lr = 0.1 * learning_rate * world_size
-    #
-    # if 120 <= epoch < 160:
-    #     lr = 0.01 * learning_rate * world_size
+    if 15 <= epoch < 200:
+        lr = learning_rate * world_size
 
-    if 92 <= epoch < 105:
+    if 200 <= epoch < 260:
         lr = 0.1 * learning_rate * world_size
 
-    if 105 <= epoch < 110:
+    if 260 <= epoch < 320:
         lr = 0.01 * learning_rate * world_size
+
+    # if 92 <= epoch < 105:
+    #     lr = 0.1 * learning_rate * world_size
+    #
+    # if 105 <= epoch < 110:
+    #     lr = 0.01 * learning_rate * world_size
 
     # if(args.local_rank == 0):
     #     print("epoch = {}, step = {}, lr = {}".format(epoch, step, lr))

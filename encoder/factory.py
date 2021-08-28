@@ -90,7 +90,7 @@ def factory_head(head_name, square_length, stride):
             keypoints = None
 
         else:
-            n_keypoints = 17
+            n_keypoints = len(COCO_KEYPOINTS)
             keypoints = COCO_KEYPOINTS
 
         LOG.info('selected encoder: Heatmap for %s of stride %d computed by %d keypoints',
@@ -105,19 +105,19 @@ def factory_head(head_name, square_length, stride):
                      'offsets') or \
             re.match('omp[s]?([0-9]+)$', head_name) is not None:
         if head_name in ('omp', 'omp19', 'omps', 'offset', 'offsets'):
-            n_keypoints = 17
+            n_keypoints = len(COCO_KEYPOINTS)
             OffsetMaps.skeleton = COCO_PERSON_SKELETON  # default selection
         elif head_name in ('omp16',):
-            n_keypoints = 17
+            n_keypoints = len(COCO_KEYPOINTS)
             OffsetMaps.skeleton = KINEMATIC_TREE_SKELETON
         elif head_name in ('omp31',):
-            n_keypoints = 17
+            n_keypoints = len(COCO_KEYPOINTS)
             OffsetMaps.skeleton = COCO_PERSON_WITH_REDUNDANT_SKELETON
         elif head_name in ('omp44',):
-            n_keypoints = 17
+            n_keypoints = len(COCO_KEYPOINTS)
             OffsetMaps.skeleton = DENSER_COCO_PERSON_SKELETON
         elif head_name in ('omp25', 'omps25'):
-            n_keypoints = 17
+            n_keypoints = len(COCO_KEYPOINTS)
             OffsetMaps.skeleton = REDUNDANT_CONNECTIONS
         else:
             raise Exception('unknown skeleton type of head')
