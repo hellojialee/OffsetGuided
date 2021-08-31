@@ -10,8 +10,8 @@ import numpy as np
 import json
 import torch
 import torchvision
-from xtcocotools.coco import COCO
-from xtcocotools.cocoeval import COCOeval
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 import config
 import data
 import transforms
@@ -21,8 +21,6 @@ from visualization import show
 import encoder
 import decoder
 from utils.util import AverageMeter
-from config.coco_data import (ANNOTATIONS_TRAIN, ANNOTATIONS_VAL, IMAGE_DIR_TRAIN, IMAGE_DIR_VAL,
-                              ANNOTATIONS_TESTDEV, ANNOTATIONS_TEST, IMAGE_DIR_TEST, COCO_KEYPOINTS)
 
 LOG = logging.getLogger(__name__)
 
@@ -40,8 +38,6 @@ def evaluate_cli():
     models.net_cli(parser)
     decoder.decoder_cli(parser)
 
-    parser.add_argument('--dataset', choices=('val', 'test', 'test-dev'), default='val',
-                        help='dataset to evaluate')
     parser.add_argument('--resume', '-r', action='store_true', default=False,
                         help='resume from checkpoint')
     parser.add_argument('--epochs', default=100, type=int, metavar='N',
@@ -67,22 +63,6 @@ def evaluate_cli():
     # args = parser.parse_args(
     #     '--checkpoint-whole link2checkpoints_storage/PoseNet_18_epoch.pth --resume --no-pretrain'.split())
     args = parser.parse_args()
-
-    if args.dataset == 'val':
-        args.image_dir = IMAGE_DIR_VAL
-        args.annotation_file = ANNOTATIONS_VAL
-    elif args.dataset == 'test':
-        args.image_dir = IMAGE_DIR_TEST
-        args.annotation_file = ANNOTATIONS_TEST
-    elif args.dataset == 'test-dev':
-        args.image_dir = IMAGE_DIR_TEST
-        args.annotation_file = ANNOTATIONS_TESTDEV
-    else:
-        raise Exception
-
-    if args.dataset in ('test', 'test-dev') and not args.all_images:
-        print('force to use --all-images for this dataset because catIds are unknown')
-        args.all_images = True
     return args
 
 
@@ -168,6 +148,7 @@ def run_images():
                     v.append(xyv[2])
                     keypoints_list += [xyv[0], xyv[1],
                                        1 if xyv[0] > 0 and xyv[1] > 0 else 0]
+                print(keypoints_list)
                 result_keypoints.append({
                     'image_id': image_id,
                     'category_id': 1,  # person category
@@ -211,14 +192,23 @@ def run_images():
     return result_keypoints, result_image_ids
 
 
-def validation(dump_name, args):
+def validation(dump_name, dataset='val2017'):
     annType = 'keypoints'
     prefix = 'person_keypoints'
 
     dataDir = 'data/link2COCO2017'
-    dataset = 'val2017'
 
-    annFile = args.annotation_file
+    # # # #############################################################################
+    # For evaluation on validation set
+    if dataset == 'val2017':
+        annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
+
+    # #############################################################################
+    # For evaluation on test-dev set
+    elif dataset == 'test2017':
+        annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json'  # image_info_test2017.json
+    else:
+        raise Exception('unknown dataset')
 
     print(annFile)
     cocoGt = COCO(annFile)
@@ -233,12 +223,8 @@ def validation(dump_name, args):
     json.dump(results_keypoints, open(resFile, 'w'))
 
     # ####################  COCO Evaluation ################
-    sigmas = np.array([
-        .79, .79, .72, .72, .62, .62, 1.07, 1.07, .87, .87, .89, .89, .79,
-        .79
-    ]) / 10.0
-    cocoDt = cocoGt.loadRes(annType)
-    cocoEval = COCOeval(cocoGt, cocoDt, 'keypoints_crowd', sigmas, use_area=False)
+    cocoDt = cocoGt.loadRes(resFile)
+    cocoEval = COCOeval(cocoGt, cocoDt, annType)
     cocoEval.params.imgIds = validation_ids  # only part of the person images are evaluated
     cocoEval.evaluate()
     cocoEval.accumulate()
@@ -258,5 +244,5 @@ if __name__ == '__main__':
     args = evaluate_cli()
 
     eval_result_original = validation(dump_name='hourglass104_focal_epoch_70_640_input_1scale',
-                                      args=args)  # 'val2017'
+                                      dataset='val2017')  # 'val2017'
     print('\ntheoretical performance of our encoding and decoding')

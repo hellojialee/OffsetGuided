@@ -1,4 +1,4 @@
-"""Evaluate the one-scale performance on MSCOCO dataset"""
+"""Evaluate the one-scale performance on CrowdPose dataset"""
 import os
 import argparse
 import logging
@@ -55,7 +55,7 @@ def evaluate_cli():
                         default='hourglass104_focal_l2_instance_l1_sqrt_epoch_77__distmax40_640_input_1scale_flip_hmpoff_gamma2_thre004',
                         type=str, help='detection file name')
 
-    parser.add_argument('--dataset', choices=('val', 'test', 'test-dev'), default='val',
+    parser.add_argument('--dataset', choices=('val', 'test', 'test-dev', 'train'), default='val',
                         help='dataset to evaluate')
     parser.add_argument('--batch-size', default=8, type=int,
                         help='batch size')
@@ -100,6 +100,9 @@ def evaluate_cli():
     if args.dataset == 'val':
         args.image_dir = IMAGE_DIR_VAL
         args.annotation_file = ANNOTATIONS_VAL
+    elif args.dataset == 'train':
+        args.image_dir = IMAGE_DIR_TRAIN
+        args.annotation_file = ANNOTATIONS_TRAIN
     elif args.dataset == 'test':
         args.image_dir = IMAGE_DIR_TEST
         args.annotation_file = ANNOTATIONS_TEST
@@ -238,7 +241,6 @@ def run_images():
                     keypoints_list += [
                         xyv[0], xyv[1], 1 if xyv[0] > 0 or xyv[1] > 0 else 0
                     ]
-                print(keypoints_list)
                 result_keypoints.append({
                     'image_id': image_id,
                     'category_id': 1,  # person category
@@ -270,7 +272,7 @@ def run_images():
                 # color_connections=True, linewidth=5,
             )
             with show.image_canvas(rgb_img,
-                                    'hehkeypoints.png',
+                                    # 'hehkeypoints.png',  # fixme, comment this line
                                    show=True,
                                    # fig_width=args.figure_width,
                                    # dpi_factor=args.dpi_factor
@@ -297,9 +299,9 @@ def run_images():
 def validation(annFile, dump_name, dataset):
     prefix = 'person_keypoints'
 
-    dataDir = 'data/link2COCO2017'
+    dataDir = 'data/link2CrowdPose'
 
-    print(annFile)
+    print('path to the ground truth annotation file is:', annFile)
     cocoGt = COCO(annFile)
 
     resFile = '%s/results/%s_%s_%s_results.json'
