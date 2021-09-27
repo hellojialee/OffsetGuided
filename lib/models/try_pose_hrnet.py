@@ -577,5 +577,12 @@ if __name__ == '__main__':
         (1, 3, 512, 512)
     )
     # ############################# Using netron to visualize the network
-    torch.onnx.export(higherHRNet, dump_input, "try_HRNet_w48.onnx")
+    # torch.onnx.export(higherHRNet, dump_input, "try_HRNet_w48.onnx")
 # # # ############################# netron --host=localhost --port=8080
+
+    from thop import profile
+    from thop import clever_format
+
+    flops, params = profile(higherHRNet, inputs=(dump_input,))
+    flops, params = clever_format([flops, params], "%.3f")
+    print(flops, params)

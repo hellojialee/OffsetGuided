@@ -221,6 +221,7 @@ def main():
         optimizer = apex_optim.FusedAdam(
             filter(lambda p: p.requires_grad, model.parameters()),
             lr=args.learning_rate * args.world_size,
+            # eps=1e-5,  # FIXME: need it?
             weight_decay=args.weight_decay)
     else:
         raise Exception(f'optimizer {args.optimizer} is not supported')

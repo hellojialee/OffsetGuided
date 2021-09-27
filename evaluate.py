@@ -52,7 +52,7 @@ def evaluate_cli():
     decoder.decoder_cli(parser)
 
     parser.add_argument('--dump-name',  # TODO: edit this name each evaluation
-                        default='hourglass104_focal_l2_instance_l1_sqrt_epoch_77__distmax40_640_input_1scale_flip_hmpoff_gamma2_thre004',
+                        default='hourglass104_focal_l2_instance_l1_sqrt_epoch_199__distmax40_640_input_1scale_flip_hmpoff_gamma2_thre004',
                         type=str, help='detection file name')
 
     parser.add_argument('--dataset', choices=('val', 'test', 'test-dev'), default='val',

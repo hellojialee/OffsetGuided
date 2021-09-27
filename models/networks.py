@@ -142,7 +142,7 @@ def save_model(path, epoch, train_loss, model, optimizer=None, amp_state=None):
         print(f'Apex is used, saving all loss_scalers and their corresponding unskipped steps...')
         data['amp'] = amp_state
     torch.save(data, path)
-    print(f'Checkpoint has been saved at {path}')
+    print(f'Checkpoint has been saved at {path} with the best loss of {train_loss}')
 
 
 def initialize_weights(model):

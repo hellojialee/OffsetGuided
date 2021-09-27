@@ -108,7 +108,7 @@ class CocoKeypoints(torch.utils.data.Dataset):
         # mask_miss areas: 0, mask_all areas: 255
 
         # Compatibility for CrowdPose and COCO dataset, since no segmentation mask in CrowPose
-        if 'segmentation' in anns[0]:
+        if anns and 'segmentation' in anns[0]:
             mask_miss, _ = self.mask_mask(image_info, anns, debug_show=self.debug_mask)
         else:
             mask_miss = self.get_mask(image_info, debug_show=self.debug_mask)

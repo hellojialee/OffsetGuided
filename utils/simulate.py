@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import time
 import datetime
 import numpy as np
+import math
 import json
 import torch
 import torchvision
@@ -87,6 +88,7 @@ def evaluate_cli():
 
 
 def run_images():
+    count=0
     result_keypoints = []
     result_image_ids = []
 
@@ -175,24 +177,87 @@ def run_images():
                     'score': sum(v) / len(v),  # todo: person pose scare
                 })
 
+        # if args.show_detected_poses:
+        #     image_poses = batch_poses[0]
+        #
+        #     image_path = metas[0]['image_path']
+        #     origi_img = cv2.imread(image_path)
+        #     image = cv2.cvtColor(origi_img, cv2.COLOR_BGR2RGB)
+        #     skeleton = processor.skeleton
+        #     keypoint_painter = show.KeypointPainter(
+        #         show_box=False,
+        #         # color_connections=True, linewidth=5,
+        #     )
+        #     with show.image_canvas(image,
+        #                            # output_path + '.keypoints.png',
+        #                            show=True,
+        #                            # fig_width=args.figure_width,
+        #                            # dpi_factor=args.dpi_factor
+        #                            ) as ax:
+        #         keypoint_painter.keypoints(ax, image_poses[:, :, :3], skeleton=skeleton)
+
         if args.show_detected_poses:
-            image_poses = batch_poses[0]
+            subset = batch_poses[0]
 
             image_path = metas[0]['image_path']
-            origi_img = cv2.imread(image_path)
-            image = cv2.cvtColor(origi_img, cv2.COLOR_BGR2RGB)
-            skeleton = processor.skeleton
-            keypoint_painter = show.KeypointPainter(
-                show_box=False,
-                # color_connections=True, linewidth=5,
-            )
-            with show.image_canvas(image,
-                                   # output_path + '.keypoints.png',
-                                   show=True,
-                                   # fig_width=args.figure_width,
-                                   # dpi_factor=args.dpi_factor
-                                   ) as ax:
-                keypoint_painter.keypoints(ax, image_poses[:, :, :3], skeleton=skeleton)
+            canvas = cv2.imread(image_path)
+            skeleton = [
+                [12, 13],
+                [13, 0],
+                [13, 1],
+                [6, 7],
+                [0, 2],
+                [2, 4],
+                [1, 3],
+                [3, 5],
+                [0, 6],
+                [1, 7],
+                [6, 8],
+                [8, 10],
+                [7, 9],
+                [9, 11]
+            ]
+
+            colors = [[128, 114, 250], [130, 238, 238], [48, 167, 238], [180, 105, 255], [255, 0, 0], [255, 85, 0],
+                      [255, 170, 0],
+                      [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0], [0, 255, 85], [0, 255, 170],
+                      [0, 255, 255],
+                      [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255], [170, 0, 255], [255, 0, 255],
+                      [255, 0, 170],
+                      [255, 0, 85], [193, 193, 255], [106, 106, 255], [20, 147, 255]]
+
+            color_board = [0, 12, 9, 21, 13,14,10,11,18,15,19,20,16,17]
+            color_idx = 0
+
+            for i in range(len(skeleton)):  # 画出18个limb　Fixme：我设计了25个limb,画的limb顺序需要调整，相应color数也要增加
+                for n in range(len(subset)):
+                    index = subset[n][np.array(skeleton[i])][:, :3]
+                    if 0 in index:  # 有-1说明没有对应的关节点与之相连,即有一个类型的part没有缺失，无法连接成limb
+                        continue
+                    # 在上一个cell中有　canvas = cv2.imread(test_image) # B,G,R order
+                    cur_canvas = canvas.copy()
+                    X = index.astype(int)[:, 1]
+                    Y = index.astype(int)[:, 0]
+                    mX = np.mean(X)
+                    mY = np.mean(Y)
+                    length = ((X[0] - X[1]) ** 2 + (Y[0] - Y[1]) ** 2) ** 0.5
+                    angle = math.degrees(math.atan2(X[0] - X[1], Y[0] - Y[1]))
+                    polygon = cv2.ellipse2Poly((int(mY), int(mX)), (int(length / 2), 3), int(angle), 0,
+                                               360, 1)
+
+                    cv2.circle(cur_canvas, (int(Y[0]), int(X[0])), 4, color=[0, 0, 0], thickness=2)
+                    cv2.circle(cur_canvas, (int(Y[1]), int(X[1])), 4, color=[0, 0, 0], thickness=2)
+                    cv2.fillConvexPoly(cur_canvas, polygon, colors[color_board[color_idx]])
+                    canvas = cv2.addWeighted(canvas, 0.4, cur_canvas, 0.6, 0)
+                color_idx += 1
+
+            # cv2.namedWindow("result", cv2.WINDOW_AUTOSIZE)  # cv2.WINDOW_NORMAL 自动适合的窗口大小
+            # cv2.imshow('result', canvas)
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
+            img_path = 'demo_imgs/' + str(count) + '_result.jpg'
+            cv2.imwrite(img_path, canvas)
+            count += 1
 
         if batch_idx % args.print_freq == 0:
             # to_python_float incurs a host<->device sync
@@ -237,7 +302,7 @@ def validation(dump_name, args):
         .79, .79, .72, .72, .62, .62, 1.07, 1.07, .87, .87, .89, .89, .79,
         .79
     ]) / 10.0
-    cocoDt = cocoGt.loadRes(annType)
+    cocoDt = cocoGt.loadRes(resFile)
     cocoEval = COCOeval(cocoGt, cocoDt, 'keypoints_crowd', sigmas, use_area=False)
     cocoEval.params.imgIds = validation_ids  # only part of the person images are evaluated
     cocoEval.evaluate()

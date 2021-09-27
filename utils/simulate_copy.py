@@ -148,7 +148,6 @@ def run_images():
                     v.append(xyv[2])
                     keypoints_list += [xyv[0], xyv[1],
                                        1 if xyv[0] > 0 and xyv[1] > 0 else 0]
-                print(keypoints_list)
                 result_keypoints.append({
                     'image_id': image_id,
                     'category_id': 1,  # person category

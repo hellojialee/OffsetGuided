@@ -53,25 +53,54 @@ python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-ch
 
 python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/hourglass_104_renamed.pth --checkpoint-whole link2checkpoints_storage/PoseNet_77_epoch.pth --resume --weight-decay 0 --hmp-loss focal_l2_loss --offset-loss offset_instance_l1_loss --sqrt-re --include-scale --scale-loss scale_l1_loss  --lambdas 1 0 0 10000 10 --headnets hmp omp --learning-rate 1.25e-4 --fgamma 2 --drop-amp-state --drop-optim-state
 
-# ######################### 使用 HRNET backbone  #########################
+
+# ######################### 使用 HRNET backbone  ##########################
 
 cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet hrnet48 --max-stride 32 --initialize-whole True --weight-decay 0 --hmp-loss focal_l2_loss --fgamma 2 --offset-loss offset_instance_l1_loss --sqrt-re --lambdas 1 0 0 10000 0 --headnets hmp omp --learning-rate 2.5e-4 --warmup --batch-size 8 --loader-workers 16 --epochs 320
 
-python evaluate.py --basenet hrnet48 --max-stride 32 --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_192_epoch.pth --resume --sqrt-re --batch-size 8 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset val --thre-hmp 0.04 --person-thre 0.04 --flip-test
+python evaluate.py --basenet hrnet48 --max-stride 32 --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/640_PoseNet_42_epoch.pth --resume --sqrt-re --batch-size 8 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset val --thre-hmp 0.04 --person-thre 0.04 --flip-test
 
 python -m torch.distributed.launch --nproc_per_node=8 train_dist.py --basenet hrnet48 --max-stride 32 --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_3_epoch.pth --weight-decay 0 --hmp-loss focal_l2_loss --fgamma 2 --offset-loss offset_instance_l1_loss --sqrt-re --lambdas 1 0 0 10000 0 --headnets hmp omp --learning-rate 1.25e-4 --batch-size 10 --loader-workers 8
 
 cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet hrnet48 --max-stride 32 --initialize-whole False --resume --checkpoint-whole link2checkpoints_storage/PoseNet_78_epoch.pth --weight-decay 0 --hmp-loss focal_l2_loss --fgamma 2 --offset-loss offset_instance_l1_loss --sqrt-re --lambdas 1 0 0 10000 0 --headnets hmp omp --learning-rate 2.5e-4 --batch-size 8 --loader-workers 8
 
+# ######## 使用640*640s输入训练
+cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --square-length 640 --min-scale 0.75 --max-scale 1.5 --basenet hrnet48 --max-stride 32 --initialize-whole False --resume --checkpoint-whole link2checkpoints_storage/PoseNet_288_epoch.pth --recount-epoch --weight-decay 0 --hmp-loss focal_l2_loss --fgamma 2 --offset-loss offset_instance_l1_loss --sqrt-re --lambdas 1 0 0 10000 0 --headnets hmp omp --learning-rate 2.5e-5 --batch-size 4 --loader-workers 8
+
+
+# ####################### 使用Hourglass-104在COCO数据集上训练，学习更多周期  #########################
+cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --basenet-checkpoint weights/PoseNet_77_epoch_only_weight.pth --recount-epoch --initialize-whole True --weight-decay 0 --hmp-loss focal_l2_loss --fgamma 2 --offset-loss offset_instance_l1_loss --sqrt-re --lambdas 1 0 0 1000 0 --headnets hmp omp --learning-rate 2.5e-5 --warmup --batch-size 8 --loader-workers 16 --epochs 200
+
+python evaluate.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage/PoseNet_199_epoch.pth --resume --sqrt-re --batch-size 8 --loader-workers 4 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset val --thre-hmp 0.04 --person-thre 0.04 --flip-test
+
 
 # #########################  使用Hourglass-104在CrowdPose数据集上训练  #########################
 cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --checkpoint-path link2checkpoints_storage_crowdpose --basenet-checkpoint weights/PoseNet_77_epoch_only_weight.pth --recount-epoch --initialize-whole True --weight-decay 0 --hmp-loss focal_l2_loss --fgamma 2 --offset-loss offset_instance_l1_loss --sqrt-re --lambdas 1 0 0 10000 0 --headnets hmp omp --learning-rate 2.5e-4 --warmup --batch-size 8 --loader-workers 16 --epochs 320
 
-python evaluate_crowd.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage_crowdpose/PoseNet_129_epoch.pth --resume --sqrt-re --batch-size 4 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset val --person-thre 0.04 --flip-test
+cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --checkpoint-path link2checkpoints_storage_crowdpose --basenet-checkpoint weights/PoseNet_77_epoch_only_weight.pth --recount-epoch --initialize-whole True --weight-decay 0 --hmp-loss l2_loss --offset-loss offset_l1_loss --sqrt-re --lambdas 1 0 0 1000 0 --headnets hmp omp --learning-rate 2.5e-4 --warmup --batch-size 8 --loader-workers 16 --epochs 320
+
+
+python evaluate_crowd.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage_crowdpose/640_PoseNet_319_epoch.pth --resume --sqrt-re --batch-size 4 --loader-workers 4 --thre-hmp 0.04 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset val --person-thre 0.02 --flip-test --fixed-height
 
 # #### continue to train  ######
-cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --checkpoint-path link2checkpoints_storage_crowdpose --basenet-checkpoint weights/PoseNet_77_epoch_only_weight.pth --initialize-whole False --resume --checkpoint-whole link2checkpoints_storage_crowdpose/PoseNet_72_epoch.pth --drop-amp-state --drop-optim-state --weight-decay 0 --hmp-loss focal_l2_loss --fgamma 2 --offset-loss offset_instance_l1_loss --sqrt-re --lambdas 1 0 0 10000 0 --headnets hmp omp --learning-rate 2.5e-4 --warmup --batch-size 8 --loader-workers 16 --epochs 320
+cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --checkpoint-path link2checkpoints_storage_crowdpose --basenet-checkpoint weights/PoseNet_77_epoch_only_weight.pth --initialize-whole False --resume --checkpoint-whole link2checkpoints_storage_crowdpose/PoseNet_108_epoch.pth --weight-decay 0 --hmp-loss l2_loss --offset-loss offset_l1_loss  --sqrt-re --lambdas 1 0 0 100 0 --headnets hmp omp --learning-rate 2.5e-4 --warmup --batch-size 8 --loader-workers 16 --epochs 320
+#  ############## 使用640*640输入分辨率训练 ###
+cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --square-length 640 --min-scale 0.75 --max-scale 1.5 --checkpoint-path link2checkpoints_storage_crowdpose --basenet-checkpoint weights/PoseNet_77_epoch_only_weight.pth --initialize-whole False --resume --checkpoint-whole link2checkpoints_storage_crowdpose/PoseNet_320_epoch.pth --recount-epoch --weight-decay 0 --hmp-loss l2_loss --offset-loss offset_l1_loss  --sqrt-re --lambdas 1 0 0 100 0 --headnets hmp omp --learning-rate 2.5e-5 --warmup --batch-size 4 --loader-workers 16 --epochs 320 --opt-level O0
 
-cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --checkpoint-path link2checkpoints_storage_crowdpose --basenet-checkpoint weights/PoseNet_77_epoch_only_weight.pth --recount-epoch --initialize-whole True --weight-decay 0 --hmp-loss l2_loss --offset-loss offset_l1_loss --sqrt-re --lambdas 1 0 0 1000 0 --headnets hmp omp --learning-rate 2.5e-4 --warmup --batch-size 8 --loader-workers 16 --epochs 320
+cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=4 train_dist.py --square-length 512 --checkpoint-path link2checkpoints_storage_crowdpose --basenet-checkpoint weights/PoseNet_77_epoch_only_weight.pth --initialize-whole False --resume --checkpoint-whole link2checkpoints_storage_crowdpose/PoseNet_290_epoch.pth --recount-epoch --weight-decay 0 --hmp-loss focal_l2_loss --fgamma 2 --offset-loss offset_instance_l1_loss --sqrt-re --lambdas 1 0 0 1000 0 --headnets hmp omp --learning-rate 2.5e-5 --warmup --batch-size 4 --loader-workers 16 --opt-level O0 --epochs 220
+
+# ###### 使用train+val继续训练
+cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=8 train_dist.py --square-length 512 --checkpoint-path link2checkpoints_storage_crowdpose --basenet-checkpoint weights/PoseNet_77_epoch_only_weight.pth --initialize-whole False --resume --checkpoint-whole link2checkpoints_storage_crowdpose/PoseNet_318_epoch.pth --recount-epoch --weight-decay 0 --hmp-loss focal_l2_loss --fgamma 2 --offset-loss offset_instance_l1_loss --sqrt-re --lambdas 1 0 0 1000 0 --headnets hmp omp --learning-rate 2.5e-5 --warmup --batch-size 4 --loader-workers 24 --opt-level O0 --epochs 220
+
+
+cd /lijia/Project/OffsetGuided && python -m torch.distributed.launch --nproc_per_node=8 train_dist.py --square-length 512 --checkpoint-path link2checkpoints_storage_crowdpose --basenet-checkpoint weights/PoseNet_77_epoch_only_weight.pth --initialize-whole False --resume --checkpoint-whole link2checkpoints_storage_crowdpose/640_PoseNet_190_epoch.pth --recount-epoch --drop-amp-state --drop-optim-state --weight-decay 0 --hmp-loss focal_l2_loss --fgamma 2 --offset-loss offset_instance_l1_loss --sqrt-re --lambdas 1 0 0 1000 0 --headnets hmp omp --learning-rate 2.5e-5 --warmup --batch-size 4 --loader-workers 24 --opt-level O0 --epochs 250 --train-annotations ANNOTATIONS_TRAINVAL
+
+
+## 训练结束后测试 #######
+python evaluate_crowd.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage_crowdpose/640_PoseNet_190_epoch.pth --resume --sqrt-re --batch-size 4 --loader-workers 4 --thre-hmp 0.04 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset test --person-thre 0.02 --flip-test --fixed-height
+
+python evaluate_crowd.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage_crowdpose/640_PoseNet_190_epoch.pth --resume --sqrt-re --batch-size 4 --loader-workers 4 --thre-hmp 0.06 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset val --person-thre 0.1 --flip-test --fixed-height --show-detected-poses
+
+python evaluate_crowd.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage_crowdpose/PoseNet_249_epoch.pth --resume --sqrt-re --batch-size 4 --loader-workers 4 --thre-hmp 0.04 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset val --person-thre 0.02 --flip-test --fixed-height
 
 
