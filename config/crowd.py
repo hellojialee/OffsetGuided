@@ -8,9 +8,8 @@ from config import heatmap_hflip, offset_hflip, vector_hflip, HFLIP
 
 LOG = logging.getLogger(__name__)
 
-ANNOTATIONS_TRAIN = 'data/link2CrowdPose/json/crowdpose_trainval.json'
-# ANNOTATIONS_TRAIN = 'data/link2CrowdPose/json/crowdpose_train.json'
-# ANNOTATIONS_TRAINVAL = 'data/link2CrowdPose/json/crowdpose_trainval.json'
+ANNOTATIONS_TRAIN = 'data/link2CrowdPose/json/crowdpose_train.json'
+ANNOTATIONS_TRAINVAL = 'data/link2CrowdPose/json/crowdpose_trainval.json'
 ANNOTATIONS_VAL = 'data/link2CrowdPose/json/crowdpose_val.json'
 IMAGE_DIR_TRAIN = 'data/link2CrowdPose/images'
 IMAGE_DIR_VAL = 'data/link2CrowdPose/images'
