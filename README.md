@@ -44,13 +44,15 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 
    Python=3.6, Pytorch>1.0, Nvidia Apex and other packages needed.
 
-2. Download the COCO dataset.
+2. Download the COCO and CrowdPose datasets.
 
 3. Download the pre-trained models via: [GoogleDrive](https://drive.google.com/drive/folders/1jG87NBm_wXKgKJh-VLkVkJTIV7vyiz1P?usp=sharing).
 
 4. Change the paths in the code according to your environment.
 
 5. Refer to the docs `cli-help-evaluate.txt`,`cli-help-train_dist.txt` to know the hypter-parameter settings and more info of this project.
+
+6. Full project is to be released. Also refer to other branches. 
 
 
 
