@@ -21,10 +21,10 @@ usage: train_dist.py [-h] [--logging-output LOGGING_OUTPUT]
                      [--two-scale] [--multi-scale] [--no-pretrain]
                      [--basenet-checkpoint BASENET_CHECKPOINT]
                      [--headnets HEADNETS [HEADNETS ...]]
-                     [--strides STRIDES [STRIDES ...]] [--max-stride {64,128}]
-                     [--include-spread] [--include-background]
-                     [--include-jitter-offset] [--include-scale]
-                     [--lambdas LAMBDAS [LAMBDAS ...]]
+                     [--strides STRIDES [STRIDES ...]]
+                     [--max-stride {32,64,128}] [--include-spread]
+                     [--include-background] [--include-jitter-offset]
+                     [--include-scale] [--lambdas LAMBDAS [LAMBDAS ...]]
                      [--stack-weights STACK_WEIGHTS [STACK_WEIGHTS ...]]
                      [--hmp-loss {l2_loss,focal_l2_loss}]
                      [--jitter-offset-loss {offset_l1_loss,vector_l1_loss,offset_laplace_loss}]
@@ -139,8 +139,8 @@ model configuration:
                         (basenet+headnets) (default: None)
 
 base network configuration:
-  --basenet BASENET     base network, e.g. hourglass4stage (default:
-                        hourglass104)
+  --basenet BASENET     base network, e.g. hrnet, hourglass104,
+                        hourglass4stage (default: hourglass104)
   --two-scale           to be implemented (default: False)
   --multi-scale         to be implemented (default: False)
   --no-pretrain         create BaseNet without pretraining (default: True)
@@ -155,7 +155,7 @@ head network configuration:
                         rations of the input to the output of basenet, also
                         the strides of all sub headnets. Also, they determin
                         the strides in encoder and decoder (default: [4, 4])
-  --max-stride {64,128}
+  --max-stride {32,64,128}
                         the max down-sampling stride through the network.
                         (default: 128)
   --include-spread      add conv layers into the headnet to regress the
@@ -227,7 +227,7 @@ apex configuration:
                         'choices': None, 'required': False, 'help': 'channel
                         last may lead to 22% speed up', 'metavar': None,
                         'container': <argparse._ArgumentGroup object at
-                        0x7fd0320b57f0>, 'prog': 'train_dist.py'}peed up
+                        0x7f1065756d30>, 'prog': 'train_dist.py'}peed up
                         (default: False)
   --print-freq N, -f N  print frequency (default: 10) (default: 10)
 
