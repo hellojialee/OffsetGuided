@@ -15,11 +15,17 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 
 ### Overview of the proposed approach
 
-(a): Responses of “left shoulder”    		     (b): Responses of “left hip”
+(a): Responses of “left shoulder”    
 
-(c): Guiding offsets from “left shoulder” to “left hip”   	  (d): Candidate keypoints and limbs
+(b): Responses of “left hip”
 
-(e): Greedy keypoint grouping           		   (f): Final result
+(c): Guiding offsets from “left shoulder” to “left hip”   	
+
+(d): Candidate keypoints and limbs
+
+(e): Greedy keypoint grouping         
+
+(f): Final result
 
 ![pipeline](docs/pipeline.png)
 
@@ -149,12 +155,6 @@ We refer to and borrow some code from [SimplePose](https://github.com/hellojiale
 If this work help your research, please cite the corresponding paper:
 
 ```
-@article{li2021greedy,
-  title={Greedy Offset-Guided Keypoint Grouping for Human Pose Estimation},
-  author={Li, Jia and Xiang, Linhua and Chen, Jiwei and Wang, Zengfu},
-  journal={arXiv preprint arXiv:2107.03098},
-  year={2021}
-}
 
 @inproceedings{li2020simple,
   title={Simple pose: Rethinking and improving a bottom-up approach for multi-person pose estimation},
