@@ -36,7 +36,7 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 - Support training on multiple GPUs (over 90% GPU usage rate on each GPU card).
 - Fast data preparing and augmentation during training.
 - Focal L2 loss for keypoint heatmap regression.
-- L1 loss for guiding offset regression.
+- L1-type loss for guiding offset regression.
 
 ## Prepare
 
