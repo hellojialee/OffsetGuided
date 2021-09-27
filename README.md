@@ -28,6 +28,7 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 1. Training Code
 2. Evaluation Code
 3. Image Demo
+4. More (in development)
 
 ## Project Features
 
