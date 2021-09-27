@@ -1,6 +1,6 @@
 # SimplePose V2
 
-Source code and pre-trained models for "**Greedy Offset-Guided Keypoint Grouping for Human Pose Estimation**" ([Paper Link](https://arxiv.org/abs/2107.03098))
+Building a simple baseline for bottom-up human pose estimation. Welcome to contribute to this project.
 
 Earlier project: [SimplePose](https://github.com/hellojialee/Improved-Body-Parts)
 
@@ -15,17 +15,11 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 
 ### Overview of the proposed approach
 
-(a): Responses of “left shoulder”    
+(a): Responses of “left shoulder”    		     (b): Responses of “left hip”
 
-(b): Responses of “left hip”
+(c): Guiding offsets from “left shoulder” to “left hip”   	  (d): Candidate keypoints and limbs
 
-(c): Guiding offsets from “left shoulder” to “left hip”   	
-
-(d): Candidate keypoints and limbs
-
-(e): Greedy keypoint grouping         
-
-(f): Final result
+(e): Greedy keypoint grouping           		   (f): Final result
 
 ![pipeline](docs/pipeline.png)
 
@@ -34,6 +28,7 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 1. Training Code
 2. Evaluation Code
 3. Image Demo
+4. More (in development)
 
 ## Project Features
 
@@ -155,7 +150,6 @@ We refer to and borrow some code from [SimplePose](https://github.com/hellojiale
 If this work help your research, please cite the corresponding paper:
 
 ```
-
 @inproceedings{li2020simple,
   title={Simple pose: Rethinking and improving a bottom-up approach for multi-person pose estimation},
   author={Li, Jia and Su, Wen and Wang, Zengfu},
