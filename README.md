@@ -1,4 +1,4 @@
-# SimplePose V2
+# A Botom-up Approach for Multi-Person Pose Estimation
 
 Building a simple baseline for bottom-up human pose estimation. Welcome to contribute to this project.
 
