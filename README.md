@@ -127,7 +127,8 @@ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.656
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.762
 ```
 
-### CrowdPose testset
+### CrowdPose test set
+Please refer to the develop branch.
 Change the cofig file to crowdpose setting, then run
 ```
 python evaluate_crowd.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage_crowdpose/PoseNet_190_epoch.pth --resume --sqrt-re --batch-size 4 --loader-workers 4 --thre-hmp 0.04 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset test  --person-thre 0.02 --flip-test --fixed-height
