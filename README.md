@@ -127,6 +127,23 @@ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.656
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.762
 ```
 
+### CrowdPose testset
+Change the cofig file to crowdpose
+```
+python evaluate_crowd.py --no-pretrain --initialize-whole False --checkpoint-whole link2checkpoints_storage_crowdpose/PoseNet_190_epoch.pth --resume --sqrt-re --batch-size 4 --loader-workers 4 --thre-hmp 0.04 --topk 32 --headnets hmp omp --dist-max 40 --long-edge 640 --dataset test  --person-thre 0.02 --flip-test --fixed-height
+```
+
+```
+Average Precision (AP) @[ IoU=0.50:0.95 | area= all | maxDets= 20 ] = 0.652
+Average Precision (AP) @[ IoU=0.50 | area= all | maxDets= 20 ] = 0.859
+Average Precision (AP) @[ IoU=0.75 | area= all | maxDets= 20 ] = 0.695
+Average Recall (AR) @[ IoU=0.50:0.95 | area= all | maxDets= 20 ] = 0.706
+Average Recall (AR) @[ IoU=0.50 | area= all | maxDets= 20 ] = 0.892
+Average Recall (AR) @[ IoU=0.75 | area= all | maxDets= 20 ] = 0.743
+Average Precision (AP) @[ IoU=0.50:0.95 | type= easy | maxDets= 20 ] = 0.738
+Average Precision (AP) @[ IoU=0.50:0.95 | type=medium | maxDets= 20 ] = 0.662
+Average Precision (AP) @[ IoU=0.50:0.95 | type= hard | maxDets= 20 ] = 0.548
+```
 
 
 ## Training
