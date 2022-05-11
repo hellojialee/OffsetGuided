@@ -1,6 +1,8 @@
 # A Botom-Up Approach for Multi-Person Pose Estimation
 
-Building a simple baseline for bottom-up human pose estimation. Welcome to contribute to this project.
+Building a simple baseline for bottom-up human pose estimation. 
+Models trained on COCO and CrowdPose datasets are available.
+Welcome to contribute to this project.
 
 Earlier project: [SimplePose](https://github.com/hellojialee/Improved-Body-Parts)
 
@@ -37,6 +39,7 @@ Guiding offsets greedily “connect” the adjacent keypoints belonging to the s
 - Fast data preparing and augmentation during training.
 - Focal L2 loss for keypoint heatmap regression.
 - L1-type loss for guiding offset regression.
+- Easy to train and run.
 
 ## Prepare
 
