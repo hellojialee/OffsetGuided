@@ -191,3 +191,16 @@ If this work help your research, please cite the corresponding paper:
   year={2021}
 }
 ```
+```
+@article{li2022multi,
+  title={Multi-person pose estimation with accurate heatmap regression and greedy association},
+  author={Li, Jia and Wang, Meng},
+  journal={IEEE Transactions on Circuits and Systems for Video Technology},
+  volume={32},
+  number={8},
+  pages={5521--5535},
+  year={2022},
+  publisher={IEEE}
+}
+```
+
