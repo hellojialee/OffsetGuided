@@ -1,4 +1,4 @@
-# A Botom-Up Approach for Multi-Person Pose Estimation
+# A Bottom-Up Approach for Multi-Person Pose Estimation
 
 Building a simple baseline for bottom-up human pose estimation. 
 Models trained on COCO and CrowdPose datasets are available.
